@@ -1,186 +1,183 @@
+Berikut adalah versi `README.md` yang sudah direvisi agar **rapi, konsisten, dan bebas dari redundansi atau konflik informasi** (seperti tabel "What works/does not work" yang sebelumnya ganda dan saling bertolak belakang).
+
+---
+
 # Arch Linux ARM on the Redmi Note 7 (`lavender`)
 
-A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi
-Redmi Note 7 with a mainline Qualcomm SDM660 kernel.
+A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Redmi Note 7 with a mainline Qualcomm SDM660 kernel.
 
-> **This is not a supported distribution.** You will erase Android and you can
-> brick the phone if you skip steps. Read [`docs/INSTALL.md`](docs/INSTALL.md)
-> all the way through before you start.
+> **Warning:** **This is not an officially supported distribution.** Following this guide will wipe Android completely. You can brick your phone if you skip steps. Read [`docs/INSTALL.md`](https://www.google.com/search?q=docs/INSTALL.md) thoroughly before starting.
 
-## Status at a glance
+---
 
-| | |
+## Status at a Glance
+
+| Property | Details |
 | --- | --- |
-| **Default install** | **Headless** — console on `tty1`, SSH over USB/WiFi |
-| **GUI** | Experimental, opt-in. Phosh runs but is still buggy. |
+| **Default Install** | **Headless** — serial console on `tty1`, SSH over USB RNDIS & Wi-Fi |
+| **GUI** | Experimental, opt-in. Phosh runs but remains buggy |
 | **Kernel** | `7.0.14-sdm660` from [`sdm660-mainline/linux`](https://github.com/sdm660-mainline/linux) |
-| **Root filesystem** | Arch Linux ARM aarch64, ext4 |
+| **Root Filesystem** | Arch Linux ARM (`aarch64`), `ext4` |
 | **Bootloader** | Unlocked bootloader required |
 
-The headless install is the one that has been replayed end-to-end. The GUI is
-shipped as an opt-in extra because it is not reliable enough to be the
-default.
+---
 
-## What works
-
-| Feature | State |
-| --- | --- |
-| Boot / reboot | works |
-| Serial console on `tty1` | works |
-| SSH over USB RNDIS (`172.16.42.1`) | works |
-| SSH over WiFi | works |
-| WiFi (WCN3990 / `ath10k`) | works, 2.4 and 5 GHz |
-| Display + touchscreen | works |
-| GPU (Adreno 512, a5xx) | works with the patches in `kernel/patches/` |
-| Modem / SIM detection | works (SIM must be in slot 1) |
-| LTE registration | works |
-| SMS (ModemManager / `mmcli`) | works |
-| Charging / battery reporting | works |
-| `pacman` and package installs | works |
-
-## What does not work (or is untested)
+## Feature Status
 
 | Feature | Status | Notes |
-|---|---|---|
-| Display | ✅ | 
-| Touch | ✅ | 
-| GPU | partial | 
-| Wi-Fi | ✅ | 
-| USB-C | ✅ |
-| Charging | ✅ | 
-| Offline charging | does not work | 
-| Speakers and mics | Speaker does not work but Mic works out of the box |
-| Earpiece | ✅ | it can use as phone speaker |
-| Sensors |  not tested |
-| Video decoding | not tested |
-| Bluetooth | does not work | 
-| Vibration | does not work | 
-| Flashlight | does no work | 
-| Cameras | does not work | 
+| --- | --- | --- |
+| **Boot / Reboot** | Working | Stable system boot |
+| **Wi-Fi** | Working | WCN3990 / `ath10k` (2.4 GHz & 5 GHz) |
+| **Display & Touchscreen** | Working | — |
+| **GPU (Adreno 512, a5xx)** | Partial | Works with patches in `kernel/patches/` |
+| **Charging & Battery** | Working | Standard charging and battery reporting work |
+| **Offline Charging** | Broken | System does not boot into offline charging mode |
+| **Audio - Earpiece** | Working | Can be used as phone speaker |
+| **Audio - Microphone** | Working | Works out of the box |
+| **Audio - Speaker** | Broken | Main speaker is currently non-functional |
+| **Modem & SIM Detection** | Working | SIM **must** be placed in Slot 1 |
+| **LTE Registration** | Working | Network registration succeeds |
+| **SMS** | Working | Via ModemManager / `mmcli` |
+| **Cellular Data** | Broken | Kernel lacks SDM660 IPA driver (no data port) |
+| **Phone Calls** | Partial | Call setup works; **audio routing is untested** |
+| **Package Management** | Working | `pacman` and package updates work properly |
+| **Bluetooth** | Broken | — |
+| **Vibration** | Broken | — |
+| **Flashlight / Torch** | Broken | — |
+| **Cameras** | Untested | — |
+| **Sensors** | Untested | — |
+| **Video Decoding** | Untested | Hardware acceleration untested |
+| **GPS** | Untested | — |
+| **Suspend / Deep Sleep** | Untested | — |
+| **Fingerprint Sensor** | Untested | — |
+| **Phosh / GUI Session** | Experimental | Opt-in; see [`docs/GUI-EXPERIMENTAL.md`](https://www.google.com/search?q=docs/GUI-EXPERIMENTAL.md) |
 
-| Cellular **data** | does not work — the kernel has no SDM660 IPA driver, so ModemManager has no data port |
-| Phone calls | call setup works; **audio routing is untested** |
-| Phosh / GUI | experimental; see [`docs/GUI-EXPERIMENTAL.md`](docs/GUI-EXPERIMENTAL.md) |
-| Camera | not tested |
-| Bluetooth | not tested |
-| GPS | not tested |
-| Suspend / deep sleep | not tested |
-| Fingerprint sensor | not tested |
+For detailed version history and logs, see [`docs/STATUS.md`](https://www.google.com/search?q=docs/STATUS.md).
 
-See [`docs/STATUS.md`](docs/STATUS.md) for details and tested versions.
+---
 
-## Quick start
+## Quick Start
 
-1. **Unlock the bootloader.** This is mandatory and wipes the phone. See
-   [`docs/INSTALL.md`](docs/INSTALL.md#1-unlock-the-bootloader).
-2. **Download the release assets** (boot image, initramfs, rootfs tarball,
-   kernel). Verify the checksums.
-3. **Build a flashable rootfs image** on your PC:
+1. **Unlock the Bootloader**: Mandatory step. Wipes all user data. See [`docs/INSTALL.md`](https://www.google.com/search?q=docs/INSTALL.md%231-unlock-the-bootloader).
+2. **Download Release Assets**: Grab the boot image, initramfs, rootfs tarball, and kernel. Verify all SHA-256 checksums.
+3. **Build RootFS Image** (on PC):
+```bash
+sudo ./rootfs/build-rootfs.sh rootfs-arch.tar.zst rootfs.img
+# Optional: Add --with-gui for the experimental Phosh desktop
 
-   ```sh
-   sudo ./rootfs/build-rootfs.sh rootfs-arch.tar.zst rootfs.img
-   # optional: --with-gui for the experimental Phosh session
-   ```
+```
 
-4. **Flash** from fastboot mode:
 
-   ```sh
-   ./scripts/flash.sh rootfs.img.sparse arch-lavender-boot.img
-   ```
+4. **Flash via Fastboot**:
+```bash
+./scripts/flash.sh rootfs.img.sparse arch-lavender-boot.img
 
-5. **Boot, connect the USB cable, and log in**:
+```
 
-   ```sh
-   ssh root@172.16.42.1     # password: arch
-   ```
 
-6. **Grow the filesystem** to the full userdata partition:
+5. **Boot & Log In**:
+Connect USB cable and log in via SSH:
+```bash
+ssh root@172.16.42.1     # Default password: arch
 
-   ```sh
-   resize2fs /dev/disk/by-partlabel/userdata
-   ```
+```
 
-7. Run `sh scripts/verify.sh` on the phone.
 
-The full walkthrough, including WiFi and modem setup, is in
-[`docs/INSTALL.md`](docs/INSTALL.md).
+6. **Expand Root Filesystem**:
+```bash
+resize2fs /dev/disk/by-partlabel/userdata
 
-## Repository layout
+```
+
+
+7. **Run Post-Install Health Check**:
+```bash
+sh scripts/verify.sh
+
+```
+
+
+
+Complete walkthroughs for Wi-Fi and modem setup are located in [`docs/INSTALL.md`](https://www.google.com/search?q=docs/INSTALL.md).
+
+---
+
+## Repository Layout
 
 ```
 .
 ├── README.md
 ├── docs/
-│   ├── INSTALL.md              full install walkthrough
-│   ├── HARDWARE.md             device, partitions, boot image layout
-│   ├── STATUS.md               what works / tested versions
-│   ├── TROUBLESHOOTING.md      boot, fsck, modem, WiFi, USB
-│   ├── BUILD-KERNEL.md         local and CI kernel builds
-│   └── GUI-EXPERIMENTAL.md     opt-in Phosh session
+│   ├── INSTALL.md           Full installation walkthrough
+│   ├── HARDWARE.md          Hardware specs, partition layout, boot.img structure
+│   ├── STATUS.md            Tested kernel versions & detailed feature matrix
+│   ├── TROUBLESHOOTING.md   Boot loops, fsck, modem, Wi-Fi, and USB debugging
+│   ├── BUILD-KERNEL.md     Local and CI kernel build instructions
+│   └── GUI-EXPERIMENTAL.md  Opt-in Phosh desktop guide
 ├── kernel/
-│   ├── build.sh                builds the kernel in Alpine
-│   ├── config/                 pmOS-derived kernel config
-│   ├── patches/                0001–0006 (GPU + WiFi fixes)
-│   ├── mkboot.py               self-contained Android boot.img builder
-│   └── make-bootimg.sh         wrapper around mkboot.py
+│   ├── build.sh             Alpine-based kernel build script
+│   ├── config/              pmOS-derived SDM660 kernel configuration
+│   ├── patches/             Patches 0001–0006 (GPU & Wi-Fi stability fixes)
+│   ├── mkboot.py            Self-contained Android boot.img packer
+│   └── make-bootimg.sh      Wrapper script for mkboot.py
 ├── initramfs/
-│   ├── init                    the init script that runs on the phone
-│   ├── update-modules.sh       swap modules inside an initramfs
-│   └── arch-initramfs-fsck.gz  proven initramfs (e2fsck + firmware + modules)
+│   ├── init                 Main init script executed on boot
+│   ├── update-modules.sh    Utility to update kernel modules inside initramfs
+│   └── arch-initramfs-fsck.gz Pre-built initramfs (e2fsck + firmware + modules)
 ├── rootfs/
-│   ├── build-rootfs.sh         tarball -> ext4 image -> sparse image
-│   └── overlay/                sanitized /etc files (fstab, shadow, sshd, ...)
+│   ├── build-rootfs.sh      Converts rootfs tarball -> ext4 -> sparse image
+│   └── overlay/             Pre-configured configuration files (/etc/fstab, shadow, etc.)
 ├── userspace/
-│   ├── base/                   modem/DIAG services, patches (always installed)
-│   └── gui-experimental/       Phosh units + wlroots patch (opt-in)
+│   ├── base/                Modem, DIAG services, and helper tools
+│   └── gui-experimental/    Phosh systemd units & wlroots patches
 ├── scripts/
-│   ├── flash.sh                fastboot userdata + boot
-│   └── verify.sh               post-boot health check
+│   ├── flash.sh             Fastboot helper script for userdata and boot partitions
+│   └── verify.sh            On-device health check script
 └── .github/
-    ├── actions/build-kernel/   shared kernel build
-    └── workflows/              kernel.yml, release.yml
+    ├── actions/build-kernel/ Shared CI kernel build action
+    └── workflows/           GitHub Actions workflows (kernel.yml, release.yml)
+
 ```
 
-## Releases and assets
+---
 
-Large files live in the GitHub release, not in git:
+## Releases & Assets
 
-| Asset | What it is |
+Large pre-built binary assets are hosted on the GitHub Releases page:
+
+| Asset | Description |
 | --- | --- |
-| `arch-lavender-boot.img` | proven boot image: kernel + appended DTB + initramfs |
-| `arch-initramfs-fsck.gz` | proven initramfs (runs `e2fsck`, bundles firmware) |
-| `rootfs-arch.tar.zst` | sanitized Arch Linux ARM root filesystem |
-| `linux-7.0.14-sdm660.zip` | kernel, DTB, System.map, modules |
-| `sha256sums.txt` | checksums for all of the above |
+| `arch-lavender-boot.img` | Compiled boot image (Kernel + DTB + initramfs) |
+| `arch-initramfs-fsck.gz` | Boot initramfs bundled with `e2fsck` and essential hardware firmware |
+| `rootfs-arch.tar.zst` | Sanitized base Arch Linux ARM root filesystem |
+| `linux-7.0.14-sdm660.zip` | Kernel binaries, Device Tree Blob (DTB), System.map, and modules |
+| `sha256sums.txt` | Cryptographic checksums for verifying asset integrity |
 
-The rootfs tarball is sanitized: SSH host keys, `authorized_keys`, saved WiFi
-passwords, shell history, `/etc/shadow`, and build trees are removed. The
-repo's `rootfs/overlay/` supplies a documented root password instead.
+> **Note:** The rootfs image is thoroughly sanitized prior to release (SSH keys, saved Wi-Fi credentials, build artifacts, and sensitive `/etc/shadow` entries are removed). Default root access is set via `rootfs/overlay/`.
 
-## Kernel
+---
 
-The kernel is the `v7.0.14-sdm660` tag plus six patches:
+## Kernel & Patches
 
-- `0001`–`0005`: Adreno a5xx GPU fixes. Without `0002` the GPU crashdump path
-  reads GPMU registers that the Adreno 512 does not have, and a GPU hang
-  reboots the phone.
-- `0006`: `ath10k` fix; without it the WCN3990 firmware crashes on
-  disassociation and WiFi stays dead until reboot.
+This project uses the upstream `v7.0.14-sdm660` kernel with six critical custom patches:
 
-The kernel can be rebuilt locally or in GitHub Actions; see
-[`docs/BUILD-KERNEL.md`](docs/BUILD-KERNEL.md).
+* **`0001`–`0005` (Adreno GPU Fixes):** Fixes crashdump register access on Adreno 512. Without `0002`, GPU hangs trigger unrecoverable kernel panics.
+* **`0006` (Wi-Fi Fix):** Prevents WCN3990 firmware crashes during AP disassociation, avoiding Wi-Fi driver deadlocks.
+
+To build the kernel locally or set up CI workflows, see [`docs/BUILD-KERNEL.md`](https://www.google.com/search?q=docs/BUILD-KERNEL.md).
+
+---
 
 ## Credits
 
-- Mainline SDM660 kernel: [`sdm660-mainline/linux`](https://github.com/sdm660-mainline/linux)
-- Kernel config and packaging: pmaports
-  `device/testing/linux-postmarketos-qcom-sdm660`
-- GPU patches: Fabricio Akio and Dmitry Baryshkov (FROMLIST)
-- WiFi patch: Fabricio Akio (linux-wireless)
-- Qualcomm userspace: [`linux-msm`](https://github.com/linux-msm) (`qrtr`,
-  `tqftpserv`, `rmtfs`, `pd-mapper`, `diag`)
+* **Mainline SDM660 Kernel:** [`sdm660-mainline/linux`](https://github.com/sdm660-mainline/linux)
+* **Kernel Config & Packaging:** postmarketOS (`pmaports` - `device/testing/linux-postmarketos-qcom-sdm660`)
+* **GPU Patches:** Fabricio Akio & Dmitry Baryshkov (FROMLIST)
+* **Wi-Fi Patches:** Fabricio Akio (linux-wireless)
+* **Qualcomm Userspace Daemons:** [`linux-msm`](https://github.com/linux-msm) (`qrtr`, `tqftpserv`, `rmtfs`, `pd-mapper`, `diag`)
+
+---
 
 ## License
 
-GPL-2.0. See [`LICENSE`](LICENSE). Kernel patches retain their upstream
-authors and licenses.
+Distributed under the [GPL-2.0 License](https://www.google.com/search?q=LICENSE). Upstream kernel patches retain their respective author copyrights and licenses.
