@@ -1,5 +1,6 @@
-Berikut adalah versi `README.md` yang sudah direvisi agar **rapi, konsisten, dan bebas dari redundansi atau konflik informasi** (seperti tabel "What works/does not work" yang sebelumnya ganda dan saling bertolak belakang).
-
+> **Warning:** **This is not an officially supported distribution.** Following this guide will wipe Android completely. You can brick your phone if you skip steps. Read [`docs/INSTALL.md`](docs/INSTALL.md) thoroughly before starting.
+>
+> ⚠️ **Display Panel Note:** This build and driver stack have been explicitly tested **only on the Shenchao display panel** (`nt36672a_shenchao`). Other panel variants (Tianma, BOE) have not been tested yet and may require different kernel panel drivers/modules.
 ---
 
 # Arch Linux ARM on the Redmi Note 7 (`lavender`)
