@@ -1,10 +1,10 @@
-#
 # Arch Linux ARM mirrorlist
 #
-# The official redirector picks a mirror close to you.
+# The first server is the mirror that was used on the tested device and is
+# usually fast from Asia.  The official redirector is kept as a fallback.
+Server = http://mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
 Server = http://mirror.archlinuxarm.org/$arch/$repo
 
-# Fallback mirrors (uncomment if the redirector is unreachable)
-# Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
-# Server = http://de.mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
-# Server = http://ca.us.mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
+# More mirrors (uncomment and put them above the redirector if needed):
+# Server = http://de3.mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
+# Server = http://fr.mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo

@@ -109,7 +109,7 @@ command -v img2simg || echo "img2simg missing (optional)"
 Download the assets from the GitHub release (replace the tag if needed):
 
 ```sh
-mkdir -p ~/arch-lavender && cd ~/arch-lavender
+mkdir -p ~/lavender-assets && cd ~/lavender-assets
 
 gh release download v1.0 \
   --repo kudanilmakantahwu/arch-lavender \
@@ -149,7 +149,7 @@ cd arch-lavender
 Build the image (needs root for the loop mount):
 
 ```sh
-sudo ./rootfs/build-rootfs.sh ~/arch-lavender/rootfs-arch.tar.zst ./rootfs.img
+sudo ./rootfs/build-rootfs.sh ~/lavender-assets/rootfs-arch.tar.zst ./rootfs.img
 ```
 
 The script:

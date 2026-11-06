@@ -6,13 +6,21 @@ smaller and easier to verify.
 
 ## What is removed
 
-The capture excludes:
+The capture is produced by
+[`../scripts/capture-rootfs.sh`](../scripts/capture-rootfs.sh). It excludes:
 
 - `/etc/shadow`, `/etc/gshadow` (the overlay supplies sanitized versions),
-- SSH host keys and `authorized_keys`,
-- saved NetworkManager connections,
-- shell history, caches, keyrings, and build trees,
-- the old `6.19.10-sdm660` module tree.
+- every SSH host key (RSA, ECDSA, ED25519, ML-DSA) and `authorized_keys`,
+- `/root` and all user home directories (browser profiles, cookies, chat/SMS
+  history, shell history, build trees),
+- pacman private keys (`secring.gpg`, `private-keys-v1.d`,
+  `openpgp-revocs.d`) while keeping the public keyring,
+- saved NetworkManager connections and `/etc/NetworkManager/conf.d`,
+- `/etc/resolv.conf`, DHCP leases, `/var/lib/dbus/machine-id`,
+- logs, caches, crash dumps, the old `6.19.10-sdm660` module tree.
+
+Empty `/root`, `/home/alarm`, and `/home/maf` directories are recreated by
+`build-rootfs.sh` with the correct owners.
 
 The root password in `overlay/etc/shadow` is **`arch`** so the first login
 works. Change it immediately (see `docs/INSTALL.md`).

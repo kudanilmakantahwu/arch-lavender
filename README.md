@@ -118,6 +118,7 @@ The full walkthrough, including WiFi and modem setup, is in
 │   ├── base/                   modem/DIAG services, patches (always installed)
 │   └── gui-experimental/       Phosh units + wlroots patch (opt-in)
 ├── scripts/
+│   ├── capture-rootfs.sh       sanitized rootfs capture (run on the phone)
 │   ├── flash.sh                fastboot userdata + boot
 │   └── verify.sh               post-boot health check
 └── .github/
@@ -137,9 +138,19 @@ Large files live in the GitHub release, not in git:
 | `linux-7.0.14-sdm660.zip` | kernel, DTB, System.map, modules |
 | `sha256sums.txt` | checksums for all of the above |
 
-The rootfs tarball is sanitized: SSH host keys, `authorized_keys`, saved WiFi
-passwords, shell history, `/etc/shadow`, and build trees are removed. The
-repo's `rootfs/overlay/` supplies a documented root password instead.
+The rootfs tarball is sanitized. The capture script
+([`scripts/capture-rootfs.sh`](scripts/capture-rootfs.sh)) excludes:
+
+- `/etc/shadow`, `/etc/gshadow` (the overlay supplies sanitized versions),
+- all SSH host keys and `authorized_keys`,
+- `/root` and the user home directories (browser profiles, cookies, chat/SMS
+  history, build trees),
+- pacman private keys (`secring.gpg`, `private-keys-v1.d`) while keeping the
+  public keyring,
+- saved WiFi and NetworkManager connections, DHCP leases, `/etc/resolv.conf`,
+- `machine-id`, random seeds, logs, caches, crash dumps.
+
+The repo's `rootfs/overlay/` supplies a documented root password instead.
 
 ## Kernel
 

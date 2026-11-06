@@ -64,6 +64,24 @@ zstd -dc "$TARBALL" | tar -xpf - -C "$MNT" --numeric-owner
 echo "==> applying overlay"
 cp -a "$REPO/rootfs/overlay/." "$MNT/"
 
+# The capture excludes /root and the user homes (they contained browser data,
+# chat history and build trees).  Recreate empty, correctly-owned homes.
+echo "==> recreating empty home directories"
+mkdir -p "$MNT/home"
+chmod 755 "$MNT/home"
+for u in alarm maf; do
+    uid=$(awk -F: -v u="$u" '$1 == u { print $3 }' "$MNT/etc/passwd")
+    gid=$(awk -F: -v u="$u" '$1 == u { print $4 }' "$MNT/etc/passwd")
+    [ -n "$uid" ] || continue
+    mkdir -p "$MNT/home/$u"
+    chown "$uid:$gid" "$MNT/home/$u"
+    chmod 700 "$MNT/home/$u"
+done
+mkdir -p "$MNT/root" "$MNT/var/lib/dbus"
+chown 0:0 "$MNT/root"
+chmod 700 "$MNT/root"
+ln -sf /etc/machine-id "$MNT/var/lib/dbus/machine-id"
+
 echo "==> installing base userspace files"
 install -Dm755 "$REPO/userspace/base/bin/modem-uim-init"      "$MNT/usr/local/sbin/modem-uim-init"
 install -Dm755 "$REPO/userspace/base/bin/qcom-mss-stop"       "$MNT/usr/local/sbin/qcom-mss-stop"
@@ -119,10 +137,29 @@ if [ "$WITH_GUI" -eq 1 ]; then
         ln -sf "/etc/systemd/system/$u.service" "$MNT/etc/systemd/system/graphical.target.wants/$u.service"
     done
     rm -f "$MNT/etc/systemd/system/getty@tty1.service"
+    rm -f "$MNT/etc/systemd/system/getty.target.wants/getty@tty1.service"
     ln -sf /usr/lib/systemd/system/graphical.target "$MNT/etc/systemd/system/default.target"
     ln -sf /usr/lib/systemd/system/systemd-user-sessions.service \
            "$MNT/etc/systemd/system/graphical.target.wants/systemd-user-sessions.service" 2>/dev/null || true
+
+    # phosh.service uses PAMName=login, which refuses a locked account.  Give
+    # alarm the same documented password as root so the opt-in GUI can start;
+    # change it after the first login.
+    if command -v chpasswd >/dev/null 2>&1 &&
+       printf 'alarm:arch\n' | chpasswd -R "$MNT" >/dev/null 2>&1; then
+        :
+    else
+        ROOTHASH=$(awk -F: '$1 == "root" { print $2 }' "$MNT/etc/shadow")
+        awk -F: -v OFS=: -v h="$ROOTHASH" '$1 == "alarm" { $2 = h } { print }' \
+            "$MNT/etc/shadow" > "$MNT/etc/shadow.tmp"
+        mv "$MNT/etc/shadow.tmp" "$MNT/etc/shadow"
+    fi
+    chmod 600 "$MNT/etc/shadow" "$MNT/etc/gshadow" 2>/dev/null || true
 fi
+
+# The captured image had a duplicate root-login drop-in with an unclear name.
+# The overlay's 99-root-login.conf replaces it.
+rm -f "$MNT/etc/ssh/sshd_config.d/99-lab-anyuser.conf"
 
 # Never ship host keys or a machine id from the build host.
 rm -f "$MNT"/etc/ssh/ssh_host_* 2>/dev/null || true
