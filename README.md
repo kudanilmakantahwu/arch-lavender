@@ -26,7 +26,7 @@ default.
 | Feature | State |
 | --- | --- |
 | Boot / reboot | works |
-| Console on `tty1` | works |
+| Serial console on `tty1` | works |
 | SSH over USB RNDIS (`172.16.42.1`) | works |
 | SSH over WiFi | works |
 | WiFi (WCN3990 / `ath10k`) | works, 2.4 and 5 GHz |
@@ -40,8 +40,24 @@ default.
 
 ## What does not work (or is untested)
 
-| Feature | State |
-| --- | --- |
+| Feature | Status | Notes |
+|---|---|---|
+| Display | ✅ | 
+| Touch | ✅ | 
+| GPU | partial | 
+| Wi-Fi | ✅ | 
+| USB-C | ✅ |
+| Charging | ✅ | 
+| Offline charging | does not work | 
+| Speakers and mics | Speaker does not work but Mic works out of the box |
+| Earpiece | ✅ | it can use as phone speaker |
+| Sensors |  not tested |
+| Video decoding | not tested |
+| Bluetooth | does not work | 
+| Vibration | does not work | 
+| Flashlight | does no work | 
+| Cameras | does not work | 
+
 | Cellular **data** | does not work — the kernel has no SDM660 IPA driver, so ModemManager has no data port |
 | Phone calls | call setup works; **audio routing is untested** |
 | Phosh / GUI | experimental; see [`docs/GUI-EXPERIMENTAL.md`](docs/GUI-EXPERIMENTAL.md) |
@@ -59,18 +75,17 @@ See [`docs/STATUS.md`](docs/STATUS.md) for details and tested versions.
    [`docs/INSTALL.md`](docs/INSTALL.md#1-unlock-the-bootloader).
 2. **Download the release assets** (boot image, initramfs, rootfs tarball,
    kernel). Verify the checksums.
-3. **Build a flashable rootfs image** on your PC (assets in `~/lavender-assets`,
-   repo cloned to `~/arch-lavender`; see [`docs/INSTALL.md`](docs/INSTALL.md)):
+3. **Build a flashable rootfs image** on your PC:
 
    ```sh
-   sudo ./rootfs/build-rootfs.sh ~/lavender-assets/rootfs-arch.tar.zst rootfs.img
+   sudo ./rootfs/build-rootfs.sh rootfs-arch.tar.zst rootfs.img
    # optional: --with-gui for the experimental Phosh session
    ```
 
 4. **Flash** from fastboot mode:
 
    ```sh
-   ./scripts/flash.sh rootfs.img.sparse ~/lavender-assets/arch-lavender-boot.img
+   ./scripts/flash.sh rootfs.img.sparse arch-lavender-boot.img
    ```
 
 5. **Boot, connect the USB cable, and log in**:
@@ -119,7 +134,6 @@ The full walkthrough, including WiFi and modem setup, is in
 │   ├── base/                   modem/DIAG services, patches (always installed)
 │   └── gui-experimental/       Phosh units + wlroots patch (opt-in)
 ├── scripts/
-│   ├── capture-rootfs.sh       sanitized rootfs capture (run on the phone)
 │   ├── flash.sh                fastboot userdata + boot
 │   └── verify.sh               post-boot health check
 └── .github/
@@ -139,19 +153,9 @@ Large files live in the GitHub release, not in git:
 | `linux-7.0.14-sdm660.zip` | kernel, DTB, System.map, modules |
 | `sha256sums.txt` | checksums for all of the above |
 
-The rootfs tarball is sanitized. The capture script
-([`scripts/capture-rootfs.sh`](scripts/capture-rootfs.sh)) excludes:
-
-- `/etc/shadow`, `/etc/gshadow` (the overlay supplies sanitized versions),
-- all SSH host keys and `authorized_keys`,
-- `/root` and the user home directories (browser profiles, cookies, chat/SMS
-  history, build trees),
-- pacman private keys (`secring.gpg`, `private-keys-v1.d`) while keeping the
-  public keyring,
-- saved WiFi and NetworkManager connections, DHCP leases, `/etc/resolv.conf`,
-- `machine-id`, random seeds, logs, caches, crash dumps.
-
-The repo's `rootfs/overlay/` supplies a documented root password instead.
+The rootfs tarball is sanitized: SSH host keys, `authorized_keys`, saved WiFi
+passwords, shell history, `/etc/shadow`, and build trees are removed. The
+repo's `rootfs/overlay/` supplies a documented root password instead.
 
 ## Kernel
 
