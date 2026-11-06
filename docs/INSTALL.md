@@ -280,9 +280,9 @@ The rootfs creates a USB RNDIS gadget with a fixed address:
    ```
 
 If SSH is not reachable, see
-[`TROUBLESHOOTING.md`](TROUBLESHOOTING.md#no-usb-network). The fallback is a
-serial console on `tty1` (connect the phone to a monitor over USB-C, or use a
-USB-UART adapter if you have one).
+[`TROUBLESHOOTING.md`](TROUBLESHOOTING.md#no-usb-network). The fallback is the
+console on `tty1`: the phone's own display, with a USB keyboard attached
+through an OTG adapter.
 
 > The `usb-net-debug.service` unit creates the gadget. It is only a bootstrap
 > link; once WiFi and SSH work you can leave it enabled (it is harmless) or

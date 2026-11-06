@@ -26,7 +26,7 @@ default.
 | Feature | State |
 | --- | --- |
 | Boot / reboot | works |
-| Serial console on `tty1` | works |
+| Console on `tty1` | works |
 | SSH over USB RNDIS (`172.16.42.1`) | works |
 | SSH over WiFi | works |
 | WiFi (WCN3990 / `ath10k`) | works, 2.4 and 5 GHz |
