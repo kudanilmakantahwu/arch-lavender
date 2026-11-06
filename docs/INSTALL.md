@@ -207,17 +207,18 @@ first boot (step 7).
    fastboot getvar unlocked       # should print yes
    ```
 
-3. Flash both partitions:
+3. Flash both partitions. The boot image lives in the download directory
+   (`~/lavender-assets`), the rootfs image in the repo directory:
 
    ```sh
-   ./scripts/flash.sh ./rootfs.img.sparse ./arch-lavender-boot.img
+   ./scripts/flash.sh ./rootfs.img.sparse ~/lavender-assets/arch-lavender-boot.img
    ```
 
    This runs exactly:
 
    ```sh
    fastboot flash userdata ./rootfs.img.sparse
-   fastboot flash boot     ./arch-lavender-boot.img
+   fastboot flash boot     ~/lavender-assets/arch-lavender-boot.img
    fastboot reboot
    ```
 
@@ -501,7 +502,7 @@ The kernel is not managed by `pacman`. To update it:
 3. Reboot into fastboot and flash the matching boot image:
 
    ```sh
-   fastboot flash boot arch-lavender-boot.img
+   fastboot flash boot ~/lavender-assets/arch-lavender-boot.img
    ```
 
    The boot image contains the kernel and the initramfs. Flashing only the
@@ -518,14 +519,14 @@ addresses and appended-DTB handling are already correct.
 2. Re-flash the proven boot image:
 
    ```sh
-   fastboot flash boot arch-lavender-boot.img
+   fastboot flash boot ~/lavender-assets/arch-lavender-boot.img
    fastboot reboot
    ```
 
 3. If it still fails, boot the image without writing it:
 
    ```sh
-   fastboot boot arch-lavender-boot.img
+   fastboot boot ~/lavender-assets/arch-lavender-boot.img
    ```
 
 ### The initramfs drops to an emergency shell

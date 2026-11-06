@@ -26,14 +26,14 @@ The boot image was not written, or the bootloader rejected it.
 ```sh
 fastboot devices
 fastboot getvar unlocked          # must say yes
-fastboot flash boot arch-lavender-boot.img
+fastboot flash boot ~/lavender-assets/arch-lavender-boot.img
 fastboot reboot
 ```
 
 You can also test without writing:
 
 ```sh
-fastboot boot arch-lavender-boot.img
+fastboot boot ~/lavender-assets/arch-lavender-boot.img
 ```
 
 If `fastboot boot` works but `fastboot flash boot` does not, the boot
