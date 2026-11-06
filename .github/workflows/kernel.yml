@@ -46,11 +46,18 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -e
+          KVER=7.0.14-sdm660
+          # Upload as -ci assets so a CI build can never overwrite the proven
+          # boot image / kernel zip.  Promote them by hand after testing.
+          cp "kernel/out/linux-${KVER}.zip" "kernel/out/linux-${KVER}-ci.zip"
+          cp "kernel/out/boot-${KVER}.img" "kernel/out/boot-${KVER}-ci.img"
+
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --title "$TAG" --notes "Kernel 7.0.14-sdm660 for xiaomi-lavender"
+            gh release create "$TAG" --title "$TAG" \
+              --notes "CI kernel build for xiaomi-lavender (kernel ${KVER}). Test with 'fastboot boot boot-${KVER}-ci.img' before promoting."
           fi
           gh release upload "$TAG" \
-            kernel/out/linux-7.0.14-sdm660.zip \
-            kernel/out/boot-7.0.14-sdm660.img \
+            "kernel/out/linux-${KVER}-ci.zip" \
+            "kernel/out/boot-${KVER}-ci.img" \
             kernel/out/sha256sums-kernel.txt \
             --clobber

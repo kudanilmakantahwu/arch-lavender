@@ -139,7 +139,8 @@ Two workflows build the kernel:
 
 - `.github/workflows/kernel.yml` — runs on pushes to `kernel/**` and on manual
   dispatch. It builds the kernel and boot image, uploads them as artifacts,
-  and, if you pass a release `tag`, attaches them to that release.
+  and, if you pass a release `tag`, attaches them to that release as `-ci`
+  assets.
 - `.github/workflows/release.yml` — runs on tags matching `v*`. It builds the
   same assets and uploads them as `-ci` files, so they never overwrite the
   proven boot image and kernel zip. Test a `-ci` boot image with
@@ -170,8 +171,10 @@ tag: v1.0
 ```
 
 The workflow creates the release if it does not exist and uploads the three
-assets with `--clobber`. Test the kernel on the phone first; a release is just
-a tag, it does not make an untested kernel safe.
+assets as `-ci` files (`linux-7.0.14-sdm660-ci.zip` and
+`boot-7.0.14-sdm660-ci.img`) with `--clobber`, so they never overwrite the
+proven boot image / kernel zip. Test a `-ci` boot image on the phone first;
+a release is just a tag, it does not make an untested kernel safe.
 
 ## Notes
 
