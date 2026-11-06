@@ -1,6 +1,8 @@
 # build outputs
 kernel/out/
 kernel/src/
+__pycache__/
+*.pyc
 *.img
 *.sparse
 initramfs/initramfs-new.gz
