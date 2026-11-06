@@ -1,5 +1,9 @@
 name: release
 
+# Tag-triggered kernel build.  The assets are uploaded with a "-ci" suffix so
+# they never overwrite the proven boot image / kernel zip that a maintainer
+# uploaded after testing on hardware.  Promote them by hand when they are
+# verified.
 on:
   push:
     tags:
@@ -18,29 +22,46 @@ jobs:
       - name: Build kernel, modules and boot image
         uses: ./.github/actions/build-kernel
 
-      - name: Publish release
+      - name: Publish CI assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
           TAG="${GITHUB_REF_NAME}"
+          KVER=7.0.14-sdm660
+          cp "kernel/out/linux-${KVER}.zip" "kernel/out/linux-${KVER}-ci.zip"
+          cp "kernel/out/boot-${KVER}.img" "kernel/out/boot-${KVER}-ci.img"
+
           NOTES=$(cat <<EOF
-          Arch Linux ARM for the Redmi Note 7 (xiaomi-lavender), kernel 7.0.14-sdm660.
+          Arch Linux ARM for the Redmi Note 7 (xiaomi-lavender), kernel ${KVER}.
 
           **Default install is headless** (console on tty1). Phosh is experimental
           and opt-in; see docs/GUI-EXPERIMENTAL.md.
 
-          This workflow only rebuilds the kernel and boot image.  The sanitized
-          root filesystem (\`rootfs-arch.tar.zst\`) is uploaded manually because it
-          cannot be rebuilt without a device; use \`rootfs/build-rootfs.sh\` to turn
-          it into a flashable image.
+          The \`-ci\` assets on this release were built by GitHub Actions from this
+          tag.  Test them with \`fastboot boot boot-${KVER}-ci.img\` before
+          promoting them over the proven \`arch-lavender-boot.img\` and
+          \`linux-${KVER}.zip\`.
+
+          The sanitized root filesystem (\`rootfs-arch.tar.zst\`) is uploaded
+          manually because it cannot be rebuilt without a device.  Use
+          \`rootfs/build-rootfs.sh\` to turn it into a flashable image.
 
           Read docs/INSTALL.md before flashing anything.
           EOF
           )
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --notes "$NOTES" \
-            kernel/out/linux-7.0.14-sdm660.zip \
-            kernel/out/boot-7.0.14-sdm660.img \
-            kernel/out/sha256sums-kernel.txt
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" \
+              "kernel/out/linux-${KVER}-ci.zip" \
+              "kernel/out/boot-${KVER}-ci.img" \
+              kernel/out/sha256sums-kernel.txt \
+              --clobber
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "$NOTES" \
+              "kernel/out/linux-${KVER}-ci.zip" \
+              "kernel/out/boot-${KVER}-ci.img" \
+              kernel/out/sha256sums-kernel.txt
+          fi

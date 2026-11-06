@@ -53,7 +53,10 @@ This:
 - installs `phosh.service` and `touch-zoom.service`,
 - enables both in `graphical.target`,
 - sets `default.target` to `graphical.target` and stops enabling
-  `getty@tty1`.
+  `getty@tty1`,
+- unlocks the `alarm` account with the same documented password as root
+  (`arch`), because `phosh.service` uses `PAMName=login` and refuses a locked
+  account. Change it with `passwd alarm` after the first login.
 
 Then flash the image as usual.
 
@@ -62,6 +65,9 @@ Then flash the image as usual.
 The GUI files are already in the shipped rootfs. On the phone:
 
 ```sh
+# phosh.service uses PAMName=login; a locked alarm account cannot log in.
+passwd alarm
+
 install -Dm755 /path/to/touch-zoom /usr/local/bin/touch-zoom
 
 install -Dm644 /path/to/phosh.service \

@@ -141,7 +141,9 @@ Two workflows build the kernel:
   dispatch. It builds the kernel and boot image, uploads them as artifacts,
   and, if you pass a release `tag`, attaches them to that release.
 - `.github/workflows/release.yml` — runs on tags matching `v*`. It builds the
-  same assets and creates a GitHub release.
+  same assets and uploads them as `-ci` files, so they never overwrite the
+  proven boot image and kernel zip. Test a `-ci` boot image with
+  `fastboot boot`, then promote it by hand.
 
 Both use the composite action `.github/actions/build-kernel`, which runs
 `kernel/build.sh` in `alpine:edge` and packages:
@@ -151,6 +153,9 @@ linux-7.0.14-sdm660.zip
 boot-7.0.14-sdm660.img
 sha256sums-kernel.txt
 ```
+
+The release workflow renames them to `linux-7.0.14-sdm660-ci.zip` and
+`boot-7.0.14-sdm660-ci.img` before uploading.
 
 The rootfs tarball is **not** built by CI. It cannot be reproduced without a
 device (it is a sanitized capture of a working install). It is uploaded to the
