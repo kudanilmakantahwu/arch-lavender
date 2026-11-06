@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Create a legacy (header v0) Android boot image for xiaomi-lavender.
 
-The Redmi Note 7 bootloader (ABL) expects the device tree appended to the
-kernel image (CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE).  This script builds a
-mkbootimg-compatible v0 header from scratch, so it does not depend on a
-reference boot.img or on the Android tools being installed.
+The Redmi Note 7 bootloader (ABL) expects the device tree concatenated after
+the kernel image (the `Image.gz-dtb` convention).  The bootloader finds the
+FDT by scanning for its magic, so no kernel option is involved; this script
+appends the DTB and builds a mkbootimg-compatible v0 header from scratch, so
+it does not depend on a reference boot.img or on the Android tools being
+installed.
 
 Layout produced:
 

@@ -50,7 +50,9 @@ resize2fs /dev/disk/by-partlabel/userdata
 ## Boot image
 
 The bootloader expects a **legacy Android boot image** (header version 0) with
-the device tree appended to the kernel (`CONFIG_BUILD_ARM64_APPENDED_DTB_IMAGE`).
+the device tree concatenated after `Image.gz` (the `Image.gz-dtb` convention).
+The bootloader finds the FDT by scanning for its magic, so this is a packaging
+convention rather than a kernel option.
 The values below were read back from a boot image that boots on the device.
 
 ### Header
