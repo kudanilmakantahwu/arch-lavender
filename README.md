@@ -1,10 +1,8 @@
----
-
 # Arch Linux ARM on the Redmi Note 7 (`lavender`)
 
 A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Redmi Note 7 with a mainline Qualcomm SDM660 kernel.
 
-> **Warning:** **This is not an officially supported distribution.** Following this guide will wipe Android completely. You can brick your phone if you skip steps. Read [`docs/INSTALL.md`](https://www.google.com/search?q=docs/INSTALL.md) thoroughly before starting.
+> **Warning:** **This is not an officially supported distribution.** Following this guide will wipe Android completely. You can brick your phone if you skip steps. Read [`docs/INSTALL.md`](docs/INSTALL.md) thoroughly before starting.
 > ⚠️ **Display Panel Note:** This build and driver stack have been explicitly tested **only on the Shenchao display panel** (`nt36672a_shenchao`). Other panel variants (Tianma, BOE) have not been tested yet and may require different kernel panel drivers/modules.
 
 ---
@@ -13,7 +11,7 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 
 | Property | Details |
 | --- | --- |
-| **Default Install** | **Headless** — serial console on `tty1`, SSH over USB RNDIS & Wi-Fi |
+| **Default Install** | **Headless** — console on `tty1`, SSH over USB RNDIS & Wi-Fi |
 | **GUI** | Experimental, opt-in. Phosh runs but remains buggy |
 | **Kernel** | `7.0.14-sdm660` from [`sdm660-mainline/linux`](https://github.com/sdm660-mainline/linux) |
 | **Root Filesystem** | Arch Linux ARM (`aarch64`), `ext4` |
@@ -49,20 +47,20 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **GPS** | Untested | — |
 | **Suspend / Deep Sleep** | Untested | — |
 | **Fingerprint Sensor** | Untested | — |
-| **Phosh / GUI Session** | Experimental | Opt-in; see [`docs/GUI-EXPERIMENTAL.md`](https://www.google.com/search?q=docs/GUI-EXPERIMENTAL.md) |
+| **Phosh / GUI Session** | Experimental | Opt-in; see [`docs/GUI-EXPERIMENTAL.md`](docs/GUI-EXPERIMENTAL.md) |
 
-For detailed version history and logs, see [`docs/STATUS.md`](https://www.google.com/search?q=docs/STATUS.md).
+For detailed version history and logs, see [`docs/STATUS.md`](docs/STATUS.md).
 
 ---
 
 ## Quick Start
 
-1. **Unlock the Bootloader**: Mandatory step. Wipes all user data. See [`docs/INSTALL.md#1-unlock-the-bootloader`](https://www.google.com/search?q=docs/INSTALL.md%231-unlock-the-bootloader).
+1. **Unlock the Bootloader**: Mandatory step. Wipes all user data. See [`docs/INSTALL.md#1-unlock-the-bootloader`](docs/INSTALL.md#1-unlock-the-bootloader).
 2. **Download Release Assets**: Grab the boot image, initramfs, rootfs tarball, and kernel. Verify all SHA-256 checksums.
-3. **Build RootFS Image** (on PC):
+3. **Build RootFS Image** (on PC; assets in `~/lavender-assets`, repo cloned to `~/arch-lavender`):
 
 ```bash
-sudo ./rootfs/build-rootfs.sh rootfs-arch.tar.zst rootfs.img
+sudo ./rootfs/build-rootfs.sh ~/lavender-assets/rootfs-arch.tar.zst rootfs.img
 # Optional: Add --with-gui for the experimental Phosh desktop
 
 ```
@@ -70,7 +68,7 @@ sudo ./rootfs/build-rootfs.sh rootfs-arch.tar.zst rootfs.img
 4. **Flash via Fastboot**:
 
 ```bash
-./scripts/flash.sh rootfs.img.sparse arch-lavender-boot.img
+./scripts/flash.sh rootfs.img.sparse ~/lavender-assets/arch-lavender-boot.img
 
 ```
 
@@ -96,7 +94,7 @@ sh scripts/verify.sh
 
 ```
 
-Complete walkthroughs for Wi-Fi and modem setup are located in [`docs/INSTALL.md`](https://www.google.com/search?q=docs/INSTALL.md).
+Complete walkthroughs for Wi-Fi and modem setup are located in [`docs/INSTALL.md`](docs/INSTALL.md).
 
 ---
 
@@ -129,6 +127,7 @@ Complete walkthroughs for Wi-Fi and modem setup are located in [`docs/INSTALL.md
 │   ├── base/                Modem, DIAG services, and helper tools
 │   └── gui-experimental/    Phosh systemd units & wlroots patches
 ├── scripts/
+│   ├── capture-rootfs.sh    Sanitized rootfs capture (run on the phone)
 │   ├── flash.sh             Fastboot helper script for userdata and boot partitions
 │   └── verify.sh            On-device health check script
 └── .github/
@@ -162,7 +161,7 @@ This project uses the upstream `v7.0.14-sdm660` kernel with six critical custom 
 * **`0001`–`0005` (Adreno GPU Fixes):** Fixes crashdump register access on Adreno 512. Without `0002`, GPU hangs trigger unrecoverable kernel panics.
 * **`0006` (Wi-Fi Fix):** Prevents WCN3990 firmware crashes during AP disassociation, avoiding Wi-Fi driver deadlocks.
 
-To build the kernel locally or set up CI workflows, see [`docs/BUILD-KERNEL.md`](https://www.google.com/search?q=docs/BUILD-KERNEL.md).
+To build the kernel locally or set up CI workflows, see [`docs/BUILD-KERNEL.md`](docs/BUILD-KERNEL.md).
 
 ---
 
@@ -178,4 +177,4 @@ To build the kernel locally or set up CI workflows, see [`docs/BUILD-KERNEL.md`]
 
 ## License
 
-Distributed under the [GPL-2.0 License](https://www.google.com/search?q=LICENSE). Upstream kernel patches retain their respective author copyrights and licenses.
+Distributed under the [GPL-2.0 License](LICENSE). Upstream kernel patches retain their respective author copyrights and licenses.
