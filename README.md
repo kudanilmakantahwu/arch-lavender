@@ -59,17 +59,18 @@ See [`docs/STATUS.md`](docs/STATUS.md) for details and tested versions.
    [`docs/INSTALL.md`](docs/INSTALL.md#1-unlock-the-bootloader).
 2. **Download the release assets** (boot image, initramfs, rootfs tarball,
    kernel). Verify the checksums.
-3. **Build a flashable rootfs image** on your PC:
+3. **Build a flashable rootfs image** on your PC (assets in `~/lavender-assets`,
+   repo cloned to `~/arch-lavender`; see [`docs/INSTALL.md`](docs/INSTALL.md)):
 
    ```sh
-   sudo ./rootfs/build-rootfs.sh rootfs-arch.tar.zst rootfs.img
+   sudo ./rootfs/build-rootfs.sh ~/lavender-assets/rootfs-arch.tar.zst rootfs.img
    # optional: --with-gui for the experimental Phosh session
    ```
 
 4. **Flash** from fastboot mode:
 
    ```sh
-   ./scripts/flash.sh rootfs.img.sparse arch-lavender-boot.img
+   ./scripts/flash.sh rootfs.img.sparse ~/lavender-assets/arch-lavender-boot.img
    ```
 
 5. **Boot, connect the USB cable, and log in**:
