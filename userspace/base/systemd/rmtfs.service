@@ -1,0 +1,14 @@
+[Unit]
+Description=Qualcomm remotefs service (starts the modem)
+After=diag-router.service tqftpserv.service pd-mapper.service
+Requires=diag-router.service tqftpserv.service pd-mapper.service
+Before=NetworkManager.service
+
+[Service]
+ExecStartPre=-/usr/local/sbin/qcom-mss-stop
+ExecStart=/usr/bin/rmtfs -r -P -s
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

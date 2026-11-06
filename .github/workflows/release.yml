@@ -1,0 +1,46 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build kernel, modules and boot image
+        uses: ./.github/actions/build-kernel
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          TAG="${GITHUB_REF_NAME}"
+          NOTES=$(cat <<EOF
+          Arch Linux ARM for the Redmi Note 7 (xiaomi-lavender), kernel 7.0.14-sdm660.
+
+          **Default install is headless** (console on tty1). Phosh is experimental
+          and opt-in; see docs/GUI-EXPERIMENTAL.md.
+
+          This workflow only rebuilds the kernel and boot image.  The sanitized
+          root filesystem (\`rootfs-arch.tar.zst\`) is uploaded manually because it
+          cannot be rebuilt without a device; use \`rootfs/build-rootfs.sh\` to turn
+          it into a flashable image.
+
+          Read docs/INSTALL.md before flashing anything.
+          EOF
+          )
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "$NOTES" \
+            kernel/out/linux-7.0.14-sdm660.zip \
+            kernel/out/boot-7.0.14-sdm660.img \
+            kernel/out/sha256sums-kernel.txt

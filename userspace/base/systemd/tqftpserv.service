@@ -1,0 +1,10 @@
+[Unit]
+Description=QRTR TFTP service (serves firmware to the modem)
+
+[Service]
+ExecStart=/usr/bin/tqftpserv
+Restart=always
+StateDirectory=tqftpserv
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,27 @@
+#!/bin/sh
+# Stop the modem (mss) remoteproc so rmtfs can start it cleanly after
+# tqftpserv and pd-mapper are already serving firmware / PD maps.
+# This guards against the modem having auto-booted before those services.
+
+target=""
+for r in /sys/class/remoteproc/remoteproc*; do
+    name=$(cat "$r/name" 2>/dev/null) || continue
+    case "$name" in
+        4080000.remoteproc|*q6v5-mss*) target="$r" ;;
+    esac
+done
+
+[ -n "$target" ] || exit 0
+[ "$(cat "$target/state" 2>/dev/null)" = "offline" ] && exit 0
+
+echo stop > "$target/state" 2>/dev/null || true
+
+# Wait (briefly) for it to actually go offline before rmtfs starts it.
+i=0
+while [ "$i" -lt 40 ]; do
+    [ "$(cat "$target/state" 2>/dev/null)" = "offline" ] && break
+    sleep 0.1
+    i=$((i + 1))
+done
+
+exit 0

@@ -1,0 +1,15 @@
+# build outputs
+kernel/out/
+kernel/src/
+*.img
+*.sparse
+initramfs/initramfs-new.gz
+
+# downloaded release assets
+*.tar.zst
+*.zip
+!initramfs/arch-initramfs-fsck.gz
+
+# editors / OS
+*~
+.DS_Store

@@ -1,0 +1,13 @@
+[Unit]
+Description=Bring modem online and open the primary UIM session
+After=rmtfs.service tqftpserv.service pd-mapper.service diag-router.service
+Before=ModemManager.service
+Wants=rmtfs.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/modem-uim-init
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

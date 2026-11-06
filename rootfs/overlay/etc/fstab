@@ -1,0 +1,1 @@
+LABEL=pmOS_root / ext4 defaults,noatime 0 1

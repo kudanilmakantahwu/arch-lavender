@@ -1,0 +1,56 @@
+#!/bin/sh
+# Prepare the SDM660 modem on Redmi Note 7 (lavender) for ModemManager.
+#
+# This modem firmware:
+#   * comes up in DMS mode "shutting-down" when started by rmtfs -s,
+#   * does NOT auto-create a UIM provisioning session when the card is in
+#     SIM slot 1,
+#   * rejects UIM "change provisioning session" unless the USIM AID is given.
+#
+# So we power the radio on and open the "primary GW" session on slot 1 with
+# the AID, retrying until the card reports an attached session.  Runs before
+# ModemManager so the SIM is usable when it initializes.
+
+AID=A0000000871002FF82FF3089010000FF
+
+log() { echo "modem-uim-init: $*"; }
+
+# Wait for the QRTR node / modem QMI service to answer.
+i=0
+while [ "$i" -lt 60 ]; do
+    if timeout 10 qmicli -d qrtr://0 --dms-get-operating-mode >/dev/null 2>&1; then
+        break
+    fi
+    i=$((i + 1))
+    sleep 1
+done
+
+if [ "$i" -ge 60 ]; then
+    log "modem QMI service did not appear"
+    exit 0
+fi
+
+# The firmware starts in 'shutting-down'; low-power then online gets the
+# radio running.  A firmware crash here is recovered by remoteproc.
+timeout 20 qmicli -d qrtr://0 --dms-set-operating-mode=low-power >/dev/null 2>&1 || true
+sleep 2
+timeout 20 qmicli -d qrtr://0 --dms-set-operating-mode=online >/dev/null 2>&1 || true
+sleep 4
+
+# Open (or confirm) the primary GW session on slot 1.
+i=0
+while [ "$i" -lt 10 ]; do
+    i=$((i + 1))
+    status=$(timeout 25 qmicli -d qrtr://0 --uim-get-card-status 2>/dev/null || true)
+    if echo "$status" | grep -q "Primary GW:.*slot"; then
+        log "primary GW session ready (attempt $i)"
+        exit 0
+    fi
+    timeout 25 qmicli -d qrtr://0 \
+        --uim-change-provisioning-session="session-type=primary-gw-provisioning,activate=yes,slot=1,aid=$AID" \
+        >/dev/null 2>&1 || true
+    sleep 2
+done
+
+log "primary GW session not confirmed after $i attempts"
+exit 0

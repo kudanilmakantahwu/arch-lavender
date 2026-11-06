@@ -1,0 +1,53 @@
+From: arch-lavender <noreply@example.invalid>
+Subject: [PATCH] base-modem: tolerate QMI modems with no net data port
+
+The mainline sdm660 kernel has no IPA/BAM data path, so the Qualcomm
+modem exposes a QMI control port but no net (rmnet) port.  ModemManager
+1.24.2 refuses to create a modem in that situation:
+
+  * it rejects QMI modems without a net port during port probing, and
+  * it asserts that the first data port is a net port.
+
+Relax both checks so SIM, SMS, registration and calls work even though
+a data bearer cannot be established.  This does not add a data path.
+
+Upstream source: ModemManager 1.24.2.
+Apply from the top of the ModemManager source tree with:
+    patch -p1 < modemmanager-1.24.2-no-net-port.patch
+--- a/src/mm-base-modem.c
++++ b/src/mm-base-modem.c
+@@ -1637,7 +1637,7 @@
+     if (!secondary)
+         secondary = backup_primary ? backup_primary : backup_secondary;
+ 
+-#if defined WITH_QMI
++#if 0 /* patched: allow QMI modem without net port (sdm660 has no IPA/BAM data path) */
+     /* On QMI-based modems, we need to have at least a net port */
+     if (qmi && !data_net) {
+         g_set_error_literal (error,
+@@ -1742,7 +1742,7 @@
+ 
+     /* Fail if we haven't added any single data port; this is probably a plugin
+      * misconfiguration */
+-    if (!self->priv->data) {
++    if (0) { /* patched: allow no data ports (no IPA/BAM on sdm660) */
+         g_set_error_literal (error, MM_CORE_ERROR, MM_CORE_ERROR_FAILED,
+                              "Failed to find a data port in the modem");
+         return FALSE;
+@@ -1752,10 +1752,12 @@
+     if (qmi) {
+         /* The first item in the data list must be a net port, because
+          * QMI modems only expect net ports */
+-        g_assert (MM_IS_PORT_NET (self->priv->data->data));
+-        /* let the MMPortQmi know which net driver is being used, taken
+-         * from the first item in the net port list */
+-        g_list_foreach (qmi, (GFunc)mm_port_qmi_set_net_details, (gpointer) MM_PORT (self->priv->data->data));
++        if (self->priv->data) {
++            g_assert (MM_IS_PORT_NET (self->priv->data->data));
++            /* let the MMPortQmi know which net driver is being used, taken
++             * from the first item in the net port list */
++            g_list_foreach (qmi, (GFunc)mm_port_qmi_set_net_details, (gpointer) MM_PORT (self->priv->data->data));
++        }
+ 
+         g_list_foreach (qmi, (GFunc)g_object_ref, NULL);
+         self->priv->qmi = g_steal_pointer (&qmi);
