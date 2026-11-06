@@ -1,0 +1,56 @@
+name: kernel
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to attach the assets to (e.g. v1.0). Empty = artifacts only."
+        required: false
+        type: string
+  push:
+    branches: [ main ]
+    paths:
+      - "kernel/**"
+      - "initramfs/**"
+      - ".github/workflows/kernel.yml"
+      - ".github/actions/build-kernel/**"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build kernel, modules and boot image
+        uses: ./.github/actions/build-kernel
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-7.0.14-sdm660
+          path: |
+            kernel/out/linux-7.0.14-sdm660.zip
+            kernel/out/boot-7.0.14-sdm660.img
+            kernel/out/sha256sums-kernel.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach to release
+        if: ${{ inputs.tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -e
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "$TAG" --notes "Kernel 7.0.14-sdm660 for xiaomi-lavender"
+          fi
+          gh release upload "$TAG" \
+            kernel/out/linux-7.0.14-sdm660.zip \
+            kernel/out/boot-7.0.14-sdm660.img \
+            kernel/out/sha256sums-kernel.txt \
+            --clobber

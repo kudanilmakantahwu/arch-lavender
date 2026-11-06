@@ -1,0 +1,14 @@
+[Unit]
+Description=USB RNDIS debug network (172.16.42.1)
+DefaultDependencies=no
+After=sys-kernel-config.mount
+Wants=sys-kernel-config.mount
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/usb-net-debug.sh
+
+[Install]
+WantedBy=multi-user.target

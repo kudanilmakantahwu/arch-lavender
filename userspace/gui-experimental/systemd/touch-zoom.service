@@ -1,0 +1,14 @@
+[Unit]
+Description=Touchscreen pinch zoom for GNOME Console (EXPERIMENTAL)
+After=phosh.service
+
+[Service]
+User=alarm
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+ExecStart=/usr/local/bin/touch-zoom
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=graphical.target

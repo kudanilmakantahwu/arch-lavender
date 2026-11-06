@@ -1,0 +1,94 @@
+#!/bin/busybox sh
+# Initramfs init for the Redmi Note 7 (xiaomi-lavender).
+#
+# This is the script that runs on the real device.  It:
+#   1. mounts proc/sys/dev,
+#   2. waits for the userdata partition,
+#   3. runs e2fsck on it (an unclean shutdown would otherwise make systemd
+#      hang or drop to an emergency shell),
+#   4. finds the root filesystem by UUID or by the pmOS_root label,
+#   5. repairs the /lib -> usr/lib symlink if a bad tar extraction broke it,
+#   6. loads the display modules from the bundled firmware,
+#   7. switch_root into systemd.
+#
+# The initramfs is a pmOS-style busybox image; /usr/bin/e2fsck, /usr/bin/blkid
+# and the kernel modules are bundled inside it.
+/bin/busybox --install -s 2>/dev/null
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null || mount -t tmpfs tmpfs /dev
+[ -c /dev/console ] || mknod /dev/console c 5 1
+echo "ARCH-INIT: booting kernel $(uname -r)"
+
+# The userdata partition is mmcblk1p66 on this device, but resolve it through
+# the partition label when udev has already created the symlink.
+i=0
+while [ ! -b /dev/mmcblk1p66 ] && [ ! -b /dev/disk/by-partlabel/userdata ] && [ $i -lt 100 ]; do
+    sleep 0.1
+    i=$((i+1))
+done
+
+PART=""
+if [ -b /dev/disk/by-partlabel/userdata ]; then
+    PART=/dev/disk/by-partlabel/userdata
+elif [ -b /dev/mmcblk1p66 ]; then
+    PART=/dev/mmcblk1p66
+fi
+
+# --- repair/check the root filesystem before it is mounted ---
+if [ -x /usr/bin/e2fsck ] && [ -n "$PART" ]; then
+    echo "ARCH-INIT: e2fsck -p $PART"
+    /usr/bin/e2fsck -p "$PART"
+    rc=$?
+    if [ "$rc" -ge 4 ]; then
+        echo "ARCH-INIT: preen failed (rc=$rc), forcing full repair"
+        /usr/bin/e2fsck -f -y "$PART"
+        rc=$?
+    fi
+    echo "ARCH-INIT: e2fsck done rc=$rc"
+fi
+
+mkdir -p /newroot
+ROOTDEV=""
+command -v blkid >/dev/null 2>&1 && {
+    # UUID of the image we build; the label is the stable identifier.
+    ROOTDEV=$(blkid -U 746b0120-939b-4cc9-901b-e1210127811b 2>/dev/null)
+    [ -z "$ROOTDEV" ] && ROOTDEV=$(blkid -L pmOS_root 2>/dev/null)
+    [ -z "$ROOTDEV" ] && ROOTDEV=$(blkid -L archroot 2>/dev/null)
+}
+for d in $ROOTDEV "$PART" /dev/mmcblk1p66; do
+    [ -b "$d" ] || continue
+    if mount -o rw "$d" /newroot 2>/dev/null; then
+        ROOTDEV="$d"
+        break
+    fi
+done
+
+if [ ! -f /newroot/etc/os-release ]; then
+    echo "ARCH-INIT: !!! rootfs not found -> emergency shell"
+    echo "ARCH-INIT: available block devices:"
+    ls -l /dev/mmcblk* /dev/disk/by-partlabel/* 2>/dev/null
+    exec sh
+fi
+echo "ARCH-INIT: rootfs $ROOTDEV -> $(grep PRETTY_NAME /newroot/etc/os-release)"
+
+# self-heal: /lib must be a symlink to usr/lib
+if [ -d /newroot/lib ] && [ ! -L /newroot/lib ]; then
+    echo "ARCH-INIT: repairing /lib symlink"
+    mkdir -p /newroot/usr/lib/firmware
+    cp -a /newroot/lib/firmware/. /newroot/usr/lib/firmware/ 2>/dev/null
+    rm -rf /newroot/lib
+    ln -s usr/lib /newroot/lib
+fi
+
+# load display modules (firmware is bundled in this initramfs)
+for m in msm panel-novatek-nt36672a novatek-nvt-ts; do
+    modprobe "$m" 2>/dev/null && echo "ARCH-INIT: loaded $m"
+done
+
+mount --move /proc /newroot/proc
+mount --move /sys /newroot/sys
+mount --move /dev /newroot/dev
+echo "ARCH-INIT: switch_root -> systemd"
+exec switch_root /newroot /sbin/init

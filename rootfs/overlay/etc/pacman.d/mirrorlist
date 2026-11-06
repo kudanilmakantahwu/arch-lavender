@@ -1,0 +1,10 @@
+#
+# Arch Linux ARM mirrorlist
+#
+# The official redirector picks a mirror close to you.
+Server = http://mirror.archlinuxarm.org/$arch/$repo
+
+# Fallback mirrors (uncomment if the redirector is unreachable)
+# Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
+# Server = http://de.mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
+# Server = http://ca.us.mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
