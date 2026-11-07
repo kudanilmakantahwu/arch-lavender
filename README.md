@@ -38,6 +38,9 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **Cellular Data** | Broken | Kernel lacks SDM660 IPA driver (no data port) |
 | **Phone Calls** | Partial | Call setup works; **audio routing is untested** |
 | **Package Management** | Working | `pacman` and package updates work properly |
+| **Compressed swap (zram)** | Working | `/dev/zram0`, half of RAM, `zstd`, priority 100 |
+| **PC internet over USB** | Working | `scripts/nat.sh` (NAT on the PC side) |
+| **On-device console** | Working | 16×32 font, `fbkeyboard` on-screen keyboard, tty shrunk above it |
 | **Bluetooth** | Broken | — |
 | **Vibration** | Broken | — |
 | **Flashlight / Torch** | Broken | — |
@@ -76,7 +79,15 @@ sudo ./rootfs/build-rootfs.sh ~/lavender-assets/rootfs-arch.tar.zst rootfs.img
 Connect USB cable and log in via SSH:
 
 ```bash
-ssh root@172.16.42.1     # Default password: arch
+ssh root@172.16.42.1     # Default password: arch (alarm is locked)
+
+```
+
+If the PC has internet but WiFi is not configured yet, share it over the same
+USB cable:
+
+```bash
+sudo ./scripts/nat.sh     # then follow the printed phone-side commands
 
 ```
 
@@ -95,6 +106,21 @@ sh scripts/verify.sh
 ```
 
 Complete walkthroughs for Wi-Fi and modem setup are located in [`docs/INSTALL.md`](docs/INSTALL.md).
+
+> **Important:** the released tarball was repacked by an unprivileged user, so
+> every file in it is owned by `1000:1000`. `build-rootfs.sh` runs
+> `chown -R 0:0` and restores the setuid bits on `mount`, `su`, `sudo`,
+> `passwd`, … . Skipping that step silently breaks the USB gadget and `sshd`.
+> See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md#no-usb-network).
+
+## Console and on-device keyboard
+
+The default install boots to `multi-user.target` on `tty1`. The image loads a
+16×32 console font (`latarcyrheb-sun32`) so logs are readable, and
+[`fbkeyboard`](userspace/fbkeyboard/) covers the bottom of the screen with a
+touch keyboard for logging in without a cable. It redraws every 500 ms so
+console output does not hide it, and a login hook shrinks the tty rows to the
+area above the keys. `--with-gui` leaves the keyboard to Phosh.
 
 ---
 
@@ -122,13 +148,15 @@ Complete walkthroughs for Wi-Fi and modem setup are located in [`docs/INSTALL.md
 │   └── arch-initramfs-fsck.gz Pre-built initramfs (e2fsck + firmware + modules)
 ├── rootfs/
 │   ├── build-rootfs.sh      Converts rootfs tarball -> ext4 -> sparse image
-│   └── overlay/             Pre-configured configuration files (/etc/fstab, shadow, etc.)
+│   └── overlay/             /etc/fstab, shadow, vconsole.conf, sshd, USB networking
 ├── userspace/
-│   ├── base/                Modem, DIAG services, and helper tools
+│   ├── base/                Modem/DIAG units, USB gadget, zram, fbkeyboard, helpers
+│   ├── fbkeyboard/          Vendored GPL-3.0 on-screen keyboard (source + patches)
 │   └── gui-experimental/    Phosh systemd units & wlroots patches
 ├── scripts/
 │   ├── capture-rootfs.sh    Sanitized rootfs capture (run on the phone)
 │   ├── flash.sh             Fastboot helper script for userdata and boot partitions
+│   ├── nat.sh               Share the PC's internet with the phone over USB
 │   └── verify.sh            On-device health check script
 └── .github/
     ├── actions/build-kernel/ Shared CI kernel build action

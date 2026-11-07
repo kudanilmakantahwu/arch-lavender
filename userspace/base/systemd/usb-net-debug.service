@@ -1,9 +1,13 @@
 [Unit]
 Description=USB RNDIS debug network (172.16.42.1)
-DefaultDependencies=no
-After=sys-kernel-config.mount
 Wants=sys-kernel-config.mount
-Before=multi-user.target
+After=sys-kernel-config.mount local-fs.target
+# Run after the USB controller (dwc3) has probed, but before sshd, so the
+# 172.16.42.1 link is up when the user first connects.  The script waits for
+# the UDC itself as well, so this only needs to be "after basic boot".
+Before=sshd.service
+After=network-pre.target
+Wants=network-pre.target
 
 [Service]
 Type=oneshot

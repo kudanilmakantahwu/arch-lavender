@@ -1,0 +1,13 @@
+[Unit]
+Description=Framebuffer on-screen keyboard on tty1
+After=local-fs.target systemd-vconsole-setup.service
+Before=getty@tty1.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/fbkeyboard -f /usr/share/fonts/TTF/DejaVuSans.ttf
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

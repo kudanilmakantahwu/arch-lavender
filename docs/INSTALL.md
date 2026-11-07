@@ -14,6 +14,8 @@ erases data.
 - [4. Build the root filesystem image](#4-build-the-root-filesystem-image)
 - [5. Flash the phone](#5-flash-the-phone)
 - [6. First boot and first login](#6-first-boot-and-first-login)
+- [6a. The on-device console](#6a-the-on-device-console)
+- [6b. Internet over USB (optional)](#6b-internet-over-usb-optional-before-wifi)
 - [7. Grow the root filesystem](#7-grow-the-root-filesystem)
 - [8. Set the root password and add a user](#8-set-the-root-password-and-add-a-user)
 - [9. Configure WiFi](#9-configure-wifi)
@@ -157,10 +159,20 @@ The script:
 - creates an 8 GiB image with `mkfs.ext4 -L pmOS_root`,
 - extracts the tarball with ownership preserved,
 - applies `rootfs/overlay/` (fstab, sanitized `shadow`, sshd root login,
-  USB networking),
-- installs the base userspace units and scripts,
+  USB networking, `vconsole.conf`),
+- **re-owns the whole tree as `root:root` and restores the setuid bits** on
+  `mount`, `su`, `sudo`, `passwd`, … . The released tarball was repacked by an
+  unprivileged user with `--numeric-owner`, so every entry in it is uid/gid
+  `1000`. Without this step `systemd` cannot mount `configfs` (so the USB
+  gadget never starts) and `sshd` refuses its privilege-separation directory.
+  See [No USB network](TROUBLESHOOTING.md#no-usb-network),
+- installs the base userspace units and scripts, including a `zram-swap` unit
+  (compressed swap sized at half of RAM, `zstd`),
 - sets the default target to `multi-user.target` (headless),
+- loads a readable 16×32 console font on `tty1` (`/etc/vconsole.conf`),
+- installs the `fbkeyboard` on-screen keyboard on `tty1`,
 - removes SSH host keys and the machine id,
+- recreates `/var/log` and `/var/cache` (the sanitized tarball has neither),
 - runs `e2fsck` and `resize2fs`,
 - converts to a sparse Android image with `img2simg` when available.
 
@@ -269,7 +281,9 @@ The rootfs creates a USB RNDIS gadget with a fixed address:
    ssh root@172.16.42.1
    ```
 
-   The shipped password is **`arch`**.
+   The shipped password is **`arch`**. The `alarm` and `maf` accounts are
+   **locked** in the headless build; only `--with-gui` gives `alarm` a
+   password (the same `arch`).
 
 5. You should see:
 
@@ -281,8 +295,49 @@ The rootfs creates a USB RNDIS gadget with a fixed address:
 
 If SSH is not reachable, see
 [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md#no-usb-network). The fallback is the
-console on `tty1`: the phone's own display, with a USB keyboard attached
-through an OTG adapter.
+console on `tty1` on the phone's own display. The headless image runs
+`fbkeyboard`, an on-screen keyboard, so you can type the login password with
+the touchscreen. A USB keyboard through an OTG adapter also works.
+
+## 6a. The on-device console
+
+The panel is 1080×2340, so the kernel's default 8×16 font is tiny. The image
+sets `FONT=latarcyrheb-sun32` in `/etc/vconsole.conf`, a 16×32 font that is
+about twice as easy to read (73×67 characters).
+
+`fbkeyboard` covers the bottom 660 px of the screen. It redraws every 500 ms,
+so boot messages and program output cannot scroll over it and hide it. The
+`/etc/profile.d/fbkeyboard-rows.sh` login hook shrinks the tty to the rows that
+are actually visible above the keyboard, so the shell prompt stays readable.
+
+To change the font at runtime:
+
+```sh
+setfont -C /dev/tty1 latarcyrheb-sun32   # bigger
+setfont -C /dev/tty1 -R                   # back to the default 8x16
+```
+
+## 6b. Internet over USB (optional, before WiFi)
+
+The USB link is a plain point-to-point Ethernet segment. If the PC has
+internet, the phone can share it before WiFi is configured:
+
+On the PC:
+
+```sh
+sudo ./scripts/nat.sh          # auto-detects the enx*/usb* interface
+```
+
+The script prints the two commands to run on the phone, which are roughly:
+
+```sh
+ip route replace default via 172.16.42.2 dev usb0
+printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /etc/resolv.conf
+```
+
+Then `ping -c3 1.1.1.1` and `curl -I https://archlinux.org` should work. Undo
+the route (or just reboot) once WiFi works. `nat.sh` only touches the PC's
+`iptables` NAT rules; nothing is persisted on the phone.
 
 > The `usb-net-debug.service` unit creates the gadget. It is only a bootstrap
 > link; once WiFi and SSH work you can leave it enabled (it is harmless) or
@@ -311,6 +366,14 @@ public.
 ```sh
 passwd root
 ```
+
+Default state of the shipped accounts:
+
+| Account | Password | Notes |
+| --- | --- | --- |
+| `root` | `arch` | SSH login enabled |
+| `alarm` | locked | only `--with-gui` sets it to `arch` |
+| `maf` | locked | build-machine account, never enabled |
 
 Add a normal user (optional but recommended):
 

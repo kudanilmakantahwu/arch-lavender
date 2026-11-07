@@ -77,9 +77,12 @@ tested GUI install it would occasionally hard-lock and reboot. See
 ## Works
 
 - Boot, reboot, and shutdown
-- Console on `tty1`
+- Console on `tty1` with a readable 16×32 font
+- `fbkeyboard` touch keyboard on `tty1` (headless build)
 - SSH over USB RNDIS (`172.16.42.1`)
 - SSH over WiFi
+- zram compressed swap (`/dev/zram0`, half of RAM, `zstd`)
+- PC internet over USB (`scripts/nat.sh`)
 - WiFi 2.4 GHz and 5 GHz (`ath10k`, WCN3990)
 - Display and touchscreen (Shenchao panel)
 - GPU acceleration (Adreno 512) with the a5xx patches — partial
