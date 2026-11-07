@@ -1,0 +1,13 @@
+[Unit]
+Description=zram compressed swap in RAM
+Documentation=man:zramctl(8)
+After=local-fs.target
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/zram-swap.sh
+
+[Install]
+WantedBy=multi-user.target

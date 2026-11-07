@@ -152,8 +152,8 @@ sudo ip addr add 172.16.42.2/24 dev usb0
 sudo ip link set usb0 up
 ```
 
-If no interface appears, the RNDIS gadget did not start. On the phone (serial
-console):
+If no interface appears, the RNDIS gadget did not start. On the phone (the
+on-screen `fbkeyboard` on `tty1`, or a serial console):
 
 ```sh
 systemctl status usb-net-debug
@@ -163,10 +163,43 @@ cat /var/log/usb-net-debug.log
 
 Common causes:
 
+- **Every file in the image is owned by uid/gid 1000.** The released tarball
+  was repacked by an unprivileged user, so a naive extraction leaves the whole
+  tree owned by `1000:1000`. Setuid helpers then run as euid 1000, and
+  `systemd` cannot create `/sys/kernel/config`; the journal shows
+  `sys-kernel-config.mount` failing and the gadget never appears. The same bug
+  makes `sshd` refuse to start with
+  `/usr/share/empty.sshd must be owned by root and not group or world-writable`.
+  Fix by rebuilding with the current `build-rootfs.sh` (it runs
+  `chown -R 0:0` and restores the setuid bits), or, on a live system:
+
+  ```sh
+  chown -R 0:0 /
+  chmod 600 /etc/shadow /etc/gshadow
+  chmod 440 /etc/sudoers
+  for f in /usr/bin/{mount,umount,su,sudo,passwd,newgrp,chsh,chfn,gpasswd}; do
+      chmod u+s "$f"
+  done
+  ```
+
+  `chown -R` also resets `/home`; restore the user directories afterwards.
+- `/var/log` does not exist, so `usb-net-debug.sh` exits at
+  `exec >>/var/log/usb-net-debug.log` before creating the gadget. This
+  affected images built from the first sanitized tarball; current
+  `build-rootfs.sh` recreates `/var/log`, and the script also makes it itself.
 - The kernel module `usb_f_rndis` is missing (it is in the shipped kernel).
 - The UDC is already bound to another gadget; unbind it first.
 - The host does not support RNDIS (rare on Linux; Windows needs the RNDIS
   driver).
+
+To rule the ownership bug in or out from the phone's console:
+
+```sh
+ls -ln /usr/bin/mount /usr/bin/sudo /usr/share/empty.sshd
+stat -c '%u:%g' /
+```
+
+All three must be `0 0`. If they are `1000 1000`, rebuild the image.
 
 ### SSH refuses the connection
 
@@ -174,6 +207,15 @@ Common causes:
 systemctl status sshd
 ss -lntp | grep :22
 ```
+
+If `systemctl status sshd` reports
+
+```
+/usr/share/empty.sshd must be owned by root and not group or world-writable
+```
+
+the image has the ownership bug described under [No USB
+network](#no-usb-network); `chown -R 0:0 /` fixes it.
 
 The shipped config allows root login with a password
 (`/etc/ssh/sshd_config.d/99-root-login.conf`). Change it after you set a real
@@ -196,6 +238,82 @@ ssh-keygen -R 172.16.42.1
 ```
 
 The shipped rootfs has no host keys; they are generated on first boot.
+
+---
+
+## Internet over USB
+
+If WiFi is not configured yet and the PC has internet, share it:
+
+```sh
+sudo ./scripts/nat.sh
+```
+
+The script:
+
+1. auto-detects the USB interface (`enx*` or `usb*`),
+2. sets `172.16.42.2/24` on it,
+3. enables IPv4 forwarding and NAT from `172.16.42.0/24` to the PC's default
+   interface.
+
+Then on the phone:
+
+```sh
+ip route replace default via 172.16.42.2 dev usb0
+printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /etc/resolv.conf
+ping -c3 172.16.42.2
+ping -c3 1.1.1.1
+```
+
+If `ping 172.16.42.2` works but `ping 1.1.1.1` does not, the PC is not
+forwarding. Check `sysctl net.ipv4.ip_forward` (must be `1`) and the
+`iptables -t nat -L POSTROUTING -n` rules. On a PC using `nftables` directly,
+`iptables` may be `iptables-nft`; install the `iptables` compatibility package
+if the command is missing.
+
+---
+
+## Console and on-device keyboard
+
+### The console font is too small
+
+The default kernel font on a 1080×2340 panel is 8×16. The image sets a 16×32
+font (`latarcyrheb-sun32`) in `/etc/vconsole.conf`. Check and change it live:
+
+```sh
+stty -F /dev/tty1 size          # 73 67 with the big font, 146 135 with 8x16
+cat /etc/vconsole.conf
+setfont -C /dev/tty1 latarcyrheb-sun32
+setfont -C /dev/tty1 -R         # default 8x16
+```
+
+If the font reverts after a reboot, `systemd-vconsole-setup` did not read the
+file: check `systemctl status systemd-vconsole-setup` and try running
+`systemctl restart systemd-vconsole-setup`.
+
+### The on-screen keyboard is missing or covered by output
+
+```sh
+systemctl status fbkeyboard
+journalctl -u fbkeyboard -b --no-pager
+```
+
+`fbkeyboard` draws over the framebuffer (not over a tty), so:
+
+- It needs `/dev/fb0`, the touchscreen event device, and `/dev/uinput`.
+- It redraws every 500 ms, so console output cannot permanently cover it.
+- The login hook `/etc/profile.d/fbkeyboard-rows.sh` reduces the tty rows to
+  the area above the keyboard. If the prompt still scrolls under the keys,
+  remove that file and log in again to compare.
+
+If the service runs but consumes 100 % CPU and never opens `/dev/fb0`, the
+binary is stale: rebuild it from `userspace/fbkeyboard/`. On AArch64 `char` is
+unsigned, so `char c; while ((c = getopt(...)) != -1)` never terminates; the
+current source uses `int c`.
+
+If labels overlap their key cells, the font scale in `fbkeyboard.c`
+(`FT_Set_Pixel_Sizes(face, hight*2/5, hight*2/5)`) is too large for the
+layout.
 
 ---
 
