@@ -42,12 +42,12 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **Bluetooth** | Broken | — |
 | **Vibration** | Broken | — |
 | **Flashlight / Torch** | Broken | — |
-| **Cameras** | Untested | — |
-| **Sensors** | Untested | — |
+| **Cameras** | Broken | — |
+| **Sensors** | Broken | — |
 | **Video Decoding** | Untested | Hardware acceleration untested |
-| **GPS** | Untested | — |
+| **GPS** | Broken | — |
 | **Suspend / Deep Sleep** | Untested | — |
-| **Fingerprint Sensor** | Untested | — |
+| **Fingerprint Sensor** | Broken | — |
 | **Phosh / GUI Session** | Experimental | Opt-in; see [`docs/GUI-EXPERIMENTAL.md`](docs/GUI-EXPERIMENTAL.md) |
 
 For detailed version history and logs, see [`docs/STATUS.md`](docs/STATUS.md).
