@@ -29,9 +29,7 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **GPU (Adreno 512, a5xx)** | Partial | Works with patches in `kernel/patches/` |
 | **Charging & Battery** | Working | Standard charging and battery reporting work |
 | **Offline Charging** | Broken | System does not boot into offline charging mode |
-| **Audio - Earpiece** | Working | Can be used as phone speaker |
-| **Audio - Microphone** | Working | Works out of the box |
-| **Audio - Speaker** | Broken | Main speaker is currently non-functional |
+| **Microphone, Speaker, Earpiece** | Broken |  idk |
 | **Modem & SIM Detection** | Working | SIM **must** be placed in Slot 1 |
 | **LTE Registration** | Working | Network registration succeeds |
 | **SMS** | Working | Via ModemManager / `mmcli` |
