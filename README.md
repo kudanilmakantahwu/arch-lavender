@@ -34,7 +34,7 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **LTE Registration** | Working | Network registration succeeds |
 | **SMS** | Working | Via ModemManager / `mmcli` |
 | **Cellular Data** | Broken | Kernel lacks SDM660 IPA driver (no data port) |
-| **Phone Calls** | Partial | Call setup works; **audio routing is untested** |
+| **Phone Calls** | Partial | Call setup works; **audio is broken** |
 | **Package Management** | Working | `pacman` and package updates work properly |
 | **Compressed swap (zram)** | Working | `/dev/zram0`, half of RAM, `zstd`, priority 100 |
 | **PC internet over USB** | Working | `scripts/nat.sh` (NAT on the PC side) |
