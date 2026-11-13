@@ -19,11 +19,13 @@ The capture is produced by
 - `/etc/resolv.conf`, DHCP leases, `/var/lib/dbus/machine-id`,
 - logs, caches, crash dumps, the old `6.19.10-sdm660` module tree.
 
-Empty `/root`, `/home/alarm`, and `/home/maf` directories are recreated by
-`build-rootfs.sh` with the correct owners.
+Empty `/root` and `/home/alarm` directories are recreated by
+`build-rootfs.sh` with the correct owners. The build-only `maf` account is
+removed, so the image ships exactly two login accounts: `root` and `alarm`.
 
-The root password in `overlay/etc/shadow` is **`arch`** so the first login
-works. Change it immediately (see `docs/INSTALL.md`).
+The root and `alarm` passwords in `overlay/etc/shadow` are **`arch`** so the
+first login and the Phosh session work. Change them immediately (see
+`docs/INSTALL.md`).
 
 ## Build an image
 
@@ -35,7 +37,6 @@ Options:
 
 ```sh
 sudo IMG_SIZE=12G ./build-rootfs.sh rootfs-arch.tar.zst rootfs.img
-sudo ./build-rootfs.sh rootfs-arch.tar.zst rootfs.img --with-gui
 ```
 
 The script requires root because it loop-mounts the image. It needs
@@ -52,21 +53,29 @@ files that must not come from the captured system:
 | --- | --- |
 | `etc/fstab` | mounts `LABEL=pmOS_root` |
 | `etc/hostname` | `lave-arch` |
-| `etc/shadow`, `etc/gshadow` | documented root password, locked system users |
+| `etc/shadow`, `etc/gshadow` | documented passwords, locked system users |
+| `etc/environment` | `GSK_RENDERER=cairo` for the Adreno 512 GTK4 workaround |
 | `etc/ssh/sshd_config.d/99-root-login.conf` | allow the first root login |
 | `etc/NetworkManager/conf.d/usb0.conf` | keep NetworkManager off `usb0` |
 | `etc/systemd/network/10-usb0.network` | static `172.16.42.1/24` + DHCP server |
 | `etc/pacman.conf` | pin the kernel packages, Arch ARM architecture |
 | `etc/pacman.d/mirrorlist` | Arch Linux ARM mirror |
 
-## Headless by default
+## Phosh by default
 
-The tarball was captured from a Phosh session, so `build-rootfs.sh` explicitly
-undoes the GUI enablement:
+The image boots to `graphical.target` and starts Phosh on `tty1` as user
+`alarm`. `phosh.service` is installed from `../userspace/gui/` and carries the
+`GSK_RENDERER=cairo` workaround for the Adreno 512 glyph bug.
 
-- `default.target` → `multi-user.target`
-- `getty@tty1` enabled (the `/dev/null` mask is removed)
-- `phosh` and `touch-zoom` removed from `graphical.target.wants`
-- `systemd-networkd`, `NetworkManager`, and `sshd` enabled
+The build:
 
-`--with-gui` reverses this and enables the experimental session.
+- installs and enables `phosh.service` (plus `seatd`),
+- enables `systemd-networkd`, `NetworkManager`, and `sshd`,
+- keeps `getty@tty2` enabled as a text-console fallback,
+- removes `getty@tty1` so it cannot fight the compositor,
+- sets both `root` and `alarm` passwords to `arch`,
+- deletes the `maf` build account and stale `fbkeyboard` / `touch-zoom` /
+  patched-wlroots leftovers from the captured rootfs,
+- drops older sdm660 module trees when the 7.2.3 tree is present.
+
+There is no opt-in switch: Phosh is the only session this image ships.

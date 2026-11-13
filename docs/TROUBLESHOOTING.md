@@ -153,7 +153,7 @@ sudo ip link set usb0 up
 ```
 
 If no interface appears, the RNDIS gadget did not start. On the phone (the
-on-screen `fbkeyboard` on `tty1`, or a serial console):
+`getty@tty2` console, Ctrl+Alt+F2, or a serial console):
 
 ```sh
 systemctl status usb-net-debug
@@ -273,47 +273,87 @@ if the command is missing.
 
 ---
 
-## Console and on-device keyboard
+## Console and graphical session
 
 ### The console font is too small
 
 The default kernel font on a 1080×2340 panel is 8×16. The image sets a 16×32
-font (`latarcyrheb-sun32`) in `/etc/vconsole.conf`. Check and change it live:
+font (`latarcyrheb-sun32`) in `/etc/vconsole.conf`. The graphical session runs
+on `tty1`; the font applies to the `getty@tty2` fallback. Check and change it
+live:
 
 ```sh
-stty -F /dev/tty1 size          # 73 67 with the big font, 146 135 with 8x16
+stty -F /dev/tty2 size          # 73 67 with the big font, 146 135 with 8x16
 cat /etc/vconsole.conf
-setfont -C /dev/tty1 latarcyrheb-sun32
-setfont -C /dev/tty1 -R         # default 8x16
+setfont -C /dev/tty2 latarcyrheb-sun32
+setfont -C /dev/tty2 -R         # default 8x16
 ```
 
 If the font reverts after a reboot, `systemd-vconsole-setup` did not read the
 file: check `systemctl status systemd-vconsole-setup` and try running
 `systemctl restart systemd-vconsole-setup`.
 
-### The on-screen keyboard is missing or covered by output
+### No text console at all
+
+Phosh owns `tty1`, so `getty@tty1` is intentionally disabled. Switch to the
+fallback console with **Ctrl+Alt+F2** (`getty@tty2`), or log in over SSH.
+Check:
 
 ```sh
-systemctl status fbkeyboard
-journalctl -u fbkeyboard -b --no-pager
+systemctl is-enabled getty@tty2
+systemctl status getty@tty2
 ```
 
-`fbkeyboard` draws over the framebuffer (not over a tty), so:
+If `getty@tty2` is missing, enable it:
 
-- It needs `/dev/fb0`, the touchscreen event device, and `/dev/uinput`.
-- It redraws every 500 ms, so console output cannot permanently cover it.
-- The login hook `/etc/profile.d/fbkeyboard-rows.sh` reduces the tty rows to
-  the area above the keyboard. If the prompt still scrolls under the keys,
-  remove that file and log in again to compare.
+```sh
+systemctl enable --now getty@tty2
+```
 
-If the service runs but consumes 100 % CPU and never opens `/dev/fb0`, the
-binary is stale: rebuild it from `userspace/fbkeyboard/`. On AArch64 `char` is
-unsigned, so `char c; while ((c = getopt(...)) != -1)` never terminates; the
-current source uses `int c`.
+### Text loses random letters (glyph glitches)
 
-If labels overlap their key cells, the font scale in `fbkeyboard.c`
-(`FT_Set_Pixel_Sizes(face, hight*2/5, hight*2/5)`) is too large for the
-layout.
+GTK4's NGL renderer has a broken glyph cache on freedreno/Adreno 512. Headers
+and buttons show missing letters while small text looks fine. The image exports
+`GSK_RENDERER=cairo` in `/etc/environment` and in `phosh.service`; verify it
+reached the session:
+
+```sh
+tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep GSK_RENDERER
+# GSK_RENDERER=cairo
+```
+
+If it is missing, reinstall the unit or add the variable, then restart:
+
+```sh
+systemctl daemon-reload
+systemctl restart phosh
+```
+
+### Phosh does not start / black screen
+
+```sh
+systemctl status phosh
+journalctl -b -u phosh -n 50 --no-pager
+dmesg | grep -iE 'msm|dpu|adreno|a5xx'
+```
+
+Common causes:
+
+- `seatd` is not running: `systemctl status seatd`, `systemctl enable --now seatd`.
+- The session user cannot log in: `passwd -S alarm` must say `P` (password set).
+- The compositor crashed after a GPU hang: reboot and check `dmesg | grep -i a5xx`.
+- On-screen keyboard missing: check `pgrep -x squeekboard`.
+
+To fall back to a text-only boot:
+
+```sh
+systemctl set-default multi-user.target
+systemctl disable phosh
+reboot
+```
+
+Restore the default UI later with `systemctl set-default graphical.target` and
+`systemctl enable phosh`.
 
 ---
 
@@ -508,24 +548,27 @@ patch:
 
 ---
 
-## GUI
+## Graphical session
 
-The GUI is experimental. Common symptoms:
+Phosh is the default UI, not an opt-in experiment. Common symptoms:
 
 - Phosh starts but the screen stays black: check `systemctl status phosh`,
   `journalctl -u phosh -b`, and `dmesg | grep -i msm`.
+- Text loses random glyphs: make sure `GSK_RENDERER=cairo` reached the session
+  (see [glyph glitches](#text-loses-random-letters-glyph-glitches)).
 - Touch input is offset: the panel/touch node may not match; check
   `/proc/device-tree/model` is `Xiaomi Redmi Note 7 (Shenchao)`.
 - The compositor crashes after a GPU hang: reboot and check
   `dmesg | grep -i a5xx`.
 - On-screen keyboard does not appear: `squeekboard` may not be running.
 
-To go back to headless:
+To go back to a text-only boot:
 
 ```sh
 systemctl set-default multi-user.target
-systemctl disable phosh touch-zoom
+systemctl disable phosh
 reboot
 ```
 
-See [`GUI-EXPERIMENTAL.md`](GUI-EXPERIMENTAL.md).
+`getty@tty2` is always available with Ctrl+Alt+F2, and SSH over USB stays up,
+so a broken session is never a lockout.

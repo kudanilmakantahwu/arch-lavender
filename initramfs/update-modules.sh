@@ -6,8 +6,8 @@
 #   ./update-modules.sh <linux-<ver>-sdm660.zip> <initramfs.cpio.gz> [rootfs-mountpoint]
 #
 # Examples:
-#   ./update-modules.sh linux-7.0.14-sdm660.zip arch-initramfs-fsck.gz
-#   sudo ./update-modules.sh linux-7.0.14-sdm660.zip arch-initramfs-fsck.gz /mnt
+#   ./update-modules.sh linux-7.2.3-sdm660.zip arch-initramfs-fsck.gz
+#   sudo ./update-modules.sh linux-7.2.3-sdm660.zip arch-initramfs-fsck.gz /mnt
 #
 # The zip produced by the kernel workflow contains:
 #   modroot/usr/lib/modules/<ver>/...

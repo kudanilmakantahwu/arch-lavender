@@ -1,8 +1,9 @@
 # Install Arch Linux ARM on the Redmi Note 7
 
 This is the complete walkthrough, in the order it was actually performed on a
-real Redmi Note 7 (`lavender`). It installs the **headless** system: a console
-on `tty1` and SSH over USB, with WiFi and the modem configured afterwards.
+real Redmi Note 7 (`lavender`). It installs **Phosh as the default desktop**,
+with SSH over USB and WiFi still available for recovery. There is no separate
+text-only build and no opt-in GUI flag.
 
 Read the whole page once before starting. Anything marked **destructive**
 erases data.
@@ -14,7 +15,7 @@ erases data.
 - [4. Build the root filesystem image](#4-build-the-root-filesystem-image)
 - [5. Flash the phone](#5-flash-the-phone)
 - [6. First boot and first login](#6-first-boot-and-first-login)
-- [6a. The on-device console](#6a-the-on-device-console)
+- [6a. The console fallback](#6a-the-console-fallback)
 - [6b. Internet over USB (optional)](#6b-internet-over-usb-optional-before-wifi)
 - [7. Grow the root filesystem](#7-grow-the-root-filesystem)
 - [8. Set the root password and add a user](#8-set-the-root-password-and-add-a-user)
@@ -25,7 +26,7 @@ erases data.
 - [13. Package management](#13-package-management)
 - [14. Updating the kernel](#14-updating-the-kernel)
 - [15. Re-flashing and recovery](#15-re-flashing-and-recovery)
-- [16. Experimental GUI](#16-experimental-gui)
+- [16. Phosh desktop](#16-phosh-desktop)
 
 ---
 
@@ -118,7 +119,7 @@ gh release download v1.0 \
   --pattern 'arch-lavender-boot.img' \
   --pattern 'arch-initramfs-fsck.gz' \
   --pattern 'rootfs-arch.tar.zst' \
-  --pattern 'linux-7.0.14-sdm660.zip' \
+  --pattern 'linux-7.2.3-sdm660.zip' \
   --pattern 'sha256sums.txt'
 ```
 
@@ -158,8 +159,8 @@ The script:
 
 - creates an 8 GiB image with `mkfs.ext4 -L pmOS_root`,
 - extracts the tarball with ownership preserved,
-- applies `rootfs/overlay/` (fstab, sanitized `shadow`, sshd root login,
-  USB networking, `vconsole.conf`),
+- applies `rootfs/overlay/` (fstab, passwords, `GSK_RENDERER=cairo`, sshd root
+  login, USB networking, `vconsole.conf`),
 - **re-owns the whole tree as `root:root` and restores the setuid bits** on
   `mount`, `su`, `sudo`, `passwd`, … . The released tarball was repacked by an
   unprivileged user with `--numeric-owner`, so every entry in it is uid/gid
@@ -168,9 +169,13 @@ The script:
   See [No USB network](TROUBLESHOOTING.md#no-usb-network),
 - installs the base userspace units and scripts, including a `zram-swap` unit
   (compressed swap sized at half of RAM, `zstd`),
-- sets the default target to `multi-user.target` (headless),
-- loads a readable 16×32 console font on `tty1` (`/etc/vconsole.conf`),
-- installs the `fbkeyboard` on-screen keyboard on `tty1`,
+- removes the `maf` build account and stale `fbkeyboard` / `touch-zoom` /
+  patched-wlroots leftovers, so only `root` and `alarm` can log in,
+- installs and enables Phosh, `seatd`, `systemd-networkd`, `NetworkManager`,
+  and `sshd`, and sets `default.target` to `graphical.target`,
+- keeps `getty@tty2` as a text-console fallback and leaves `tty1` to Phosh,
+- loads a readable 16×32 console font (`/etc/vconsole.conf`),
+- sets both `root` and `alarm` passwords to `arch`,
 - removes SSH host keys and the machine id,
 - recreates `/var/log` and `/var/cache` (the sanitized tarball has neither),
 - runs `e2fsck` and `resize2fs`,
@@ -190,7 +195,7 @@ rootfs.img.sparse   ~3.5G Android sparse image  (if img2simg is installed)
 ### Choosing a different size
 
 The image only needs to be big enough for the packages. 8 GiB is plenty for a
-headless install. Override it with:
+Phosh install. Override it with:
 
 ```sh
 sudo IMG_SIZE=12G ./rootfs/build-rootfs.sh rootfs-arch.tar.zst rootfs.img
@@ -281,9 +286,9 @@ The rootfs creates a USB RNDIS gadget with a fixed address:
    ssh root@172.16.42.1
    ```
 
-   The shipped password is **`arch`**. The `alarm` and `maf` accounts are
-   **locked** in the headless build; only `--with-gui` gives `alarm` a
-   password (the same `arch`).
+   The shipped password is **`arch`** for both accounts. The desktop session
+   runs as `alarm`; `root` is for SSH and administration. The image contains
+   no `maf` account.
 
 5. You should see:
 
@@ -293,28 +298,26 @@ The rootfs creates a USB RNDIS gadget with a fixed address:
    [root@lave-arch ~]#
    ```
 
-If SSH is not reachable, see
-[`TROUBLESHOOTING.md`](TROUBLESHOOTING.md#no-usb-network). The fallback is the
-console on `tty1` on the phone's own display. The headless image runs
-`fbkeyboard`, an on-screen keyboard, so you can type the login password with
-the touchscreen. A USB keyboard through an OTG adapter also works.
+The phone also boots straight into Phosh on its own display, so you can log in
+with the touchscreen if SSH is not reachable. If the graphical session
+misbehaves, Ctrl+Alt+F2 switches to the `getty@tty2` text console. A USB
+keyboard through an OTG adapter also works.
 
-## 6a. The on-device console
+## 6a. The console fallback
+
+Phosh owns `tty1`. If the session fails or you need a text shell on the device,
+press **Ctrl+Alt+F2** to reach `getty@tty2` (log in as `root` or `alarm`, both
+password `arch`). Ctrl+Alt+F1 switches back to Phosh.
 
 The panel is 1080×2340, so the kernel's default 8×16 font is tiny. The image
 sets `FONT=latarcyrheb-sun32` in `/etc/vconsole.conf`, a 16×32 font that is
 about twice as easy to read (73×67 characters).
 
-`fbkeyboard` covers the bottom 660 px of the screen. It redraws every 500 ms,
-so boot messages and program output cannot scroll over it and hide it. The
-`/etc/profile.d/fbkeyboard-rows.sh` login hook shrinks the tty to the rows that
-are actually visible above the keyboard, so the shell prompt stays readable.
-
 To change the font at runtime:
 
 ```sh
-setfont -C /dev/tty1 latarcyrheb-sun32   # bigger
-setfont -C /dev/tty1 -R                   # back to the default 8x16
+setfont -C /dev/tty2 latarcyrheb-sun32   # bigger
+setfont -C /dev/tty2 -R                   # back to the default 8x16
 ```
 
 ## 6b. Internet over USB (optional, before WiFi)
@@ -372,8 +375,10 @@ Default state of the shipped accounts:
 | Account | Password | Notes |
 | --- | --- | --- |
 | `root` | `arch` | SSH login enabled |
-| `alarm` | locked | only `--with-gui` sets it to `arch` |
-| `maf` | locked | build-machine account, never enabled |
+| `alarm` | `arch` | Desktop user; owns the Phosh session |
+
+The `maf` build account is removed from the image. If it still exists on an
+older install, remove it with `userdel -r maf`.
 
 Add a normal user (optional but recommended):
 
@@ -439,7 +444,7 @@ ssh root@172.16.42.1 'sh /root/verify.sh'
 
 It checks the kernel, root filesystem, module tree, services, network, clock,
 and modem, and prints a `RESULT:` line. Warnings are normal on a fresh
-headless install (for example, "WiFi not configured"). Failures are not.
+install (for example, "WiFi not configured"). Failures are not.
 
 ## 12. Modem, SIM and SMS
 
@@ -525,8 +530,31 @@ the IPA data path.
 - ModemManager is patched. The binary is stored in
   `/usr/local/lib/patched/ModemManager`, and
   `/etc/pacman.d/hooks/99-local-patches.hook` copies it back after an upgrade.
-- The GUI packages are installed but not enabled by default. See
-  [`GUI-EXPERIMENTAL.md`](GUI-EXPERIMENTAL.md).
+- Phosh is the default session. `GSK_RENDERER=cairo` is exported globally to
+  work around the Adreno 512 GTK4 glyph bug; see
+  [Phosh desktop](#16-phosh-desktop).
+
+### Recommended package set
+
+This is the tested Arch/ALARM package set (Phosh, GNOME apps, media, and
+Waydroid support). Everything below exists in the `core`, `extra`, `alarm`, or
+`aur` repositories:
+
+```sh
+sudo pacman -Syu
+sudo pacman -S --needed phosh phoc squeekboard phosh-mobile-settings phosh-tour xdg-desktop-portal-phosh gnome-session gnome-shell pipewire-pulse wireplumber wpa_supplicant networkmanager modemmanager nano vim firefox waydroid gnome-calendar gnome-console gnome-weather gnome-text-editor noto-fonts-emoji ttf-droid nautilus chatty gnome-software gst-libav gnome-contacts gvfs gvfs-mtp gvfs-gphoto2 gvfs-afc gvfs-smb gvfs-nfs gvfs-goa gvfs-dnssd gnome-calculator gnome-user-share showtime decibels gst-plugins-bad gst-plugins-good gst-plugin-dav1d rygel flatpak snapshot tuned-ppd tuned gnome-clocks gnome-maps loupe papers fprintd
+```
+
+These are **not** in the ALARM repositories and need AUR or an alternative:
+
+| Package | Note |
+| --- | --- |
+| `firefox-esr` | use `firefox` (already in the list) |
+| `calls` / `gnome-calls` | AUR |
+| `g4music` | AUR |
+| `ttf-twemoji` | AUR; `noto-fonts-emoji` is the tested substitute |
+| `mobile-config-firefox` | AUR, or configure Firefox manually |
+| `postmarketos-*`, `ttyescape`, `lang`, `gnome-software-plugin-apk` | pmOS/Alpine only, no Arch equivalent |
 
 Update:
 
@@ -556,16 +584,16 @@ The kernel is not managed by `pacman`. To update it:
 
    ```sh
    # on the phone, with the zip copied to /root
-   unzip -q linux-7.0.14-sdm660.zip -d /tmp/kernel
-   rm -rf /usr/lib/modules/7.0.14-sdm660
-   cp -a /tmp/kernel/modroot/usr/lib/modules/7.0.14-sdm660 /usr/lib/modules/
-   depmod 7.0.14-sdm660
+   unzip -q linux-7.2.3-sdm660.zip -d /tmp/kernel
+   rm -rf /usr/lib/modules/7.2.3-sdm660
+   cp -a /tmp/kernel/modroot/usr/lib/modules/7.2.3-sdm660 /usr/lib/modules/
+   depmod 7.2.3-sdm660
    ```
 
 3. Reboot into fastboot and flash the matching boot image:
 
    ```sh
-   fastboot flash boot ~/lavender-assets/arch-lavender-boot.img
+   fastboot flash boot ~/lavender-assets/arch-lavender-boot-7.2.3.img
    ```
 
    The boot image contains the kernel and the initramfs. Flashing only the
@@ -616,13 +644,51 @@ The initramfs runs `e2fsck -p` before mounting. If preen fails it runs a full
 Re-run steps 4–5. This erases the phone's data. The boot image does not need
 to be rebuilt.
 
-## 16. Experimental GUI
+## 16. Phosh desktop
 
-Phosh can be enabled at image-build time:
+Phosh is the default UI and starts automatically on `tty1` as user `alarm`:
+
+- `phoc` is the Wayland compositor,
+- `squeekboard` provides the on-screen keyboard,
+- `seatd` grants the session access to DRM/input devices,
+- `getty@tty2` stays enabled as a text-console fallback.
+
+The image ships `GSK_RENDERER=cairo` in `/etc/environment` and in the Phosh
+unit. GTK4's NGL renderer loses glyphs at random on the Adreno 512 (headers and
+buttons show missing letters); the cairo renderer is slower but correct, and
+it is the same workaround postmarketOS uses on Adreno 5xx.
+
+Check the session:
 
 ```sh
-sudo ./rootfs/build-rootfs.sh rootfs-arch.tar.zst rootfs.img --with-gui
+systemctl status phosh
+pgrep -af 'phoc|phosh|squeekboard'
+tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep GSK_RENDERER
 ```
 
-It is still buggy. Read [`GUI-EXPERIMENTAL.md`](GUI-EXPERIMENTAL.md) before
-enabling it, and keep the USB SSH link as your escape hatch.
+If text is still corrupted, make sure the variable is present, then restart:
+
+```sh
+systemctl daemon-reload
+systemctl restart phosh
+```
+
+To run without the graphical session (for debugging), switch the default
+target and reboot:
+
+```sh
+systemctl set-default multi-user.target
+systemctl disable phosh
+reboot
+```
+
+Then log in on `tty1`/`tty2` or over SSH. To restore the default UI:
+
+```sh
+systemctl set-default graphical.target
+systemctl enable phosh
+reboot
+```
+
+The USB SSH link stays available in both cases, so a broken session is never a
+lockout.

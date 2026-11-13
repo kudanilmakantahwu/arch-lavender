@@ -3,9 +3,8 @@ Operation = Install
 Operation = Upgrade
 Type = Package
 Target = modemmanager
-Target = wlroots0.20
 
 [Action]
-Description = Re-applying local patches (ModemManager no-data-port, wlroots layer-shell)
+Description = Re-applying local patch (ModemManager no-data-port)
 When = PostTransaction
 Exec = /usr/local/sbin/reinstall-patched-libs

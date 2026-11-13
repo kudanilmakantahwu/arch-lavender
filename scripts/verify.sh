@@ -18,6 +18,11 @@ echo "  kernel:   $(uname -r)"
 echo "  machine:  $(uname -m)"
 echo "  hostname: $(cat /etc/hostname 2>/dev/null)"
 echo "  uptime:   $(uptime -p 2>/dev/null || true)"
+if getent passwd maf >/dev/null 2>&1; then
+    fail "build account 'maf' still present (expected root + alarm only)"
+else
+    ok "no 'maf' build account"
+fi
 
 echo "== root filesystem =="
 ROOTDEV=$(findmnt -n -o SOURCE / 2>/dev/null || true)
@@ -65,23 +70,36 @@ for m in msm ath10k_snoc qcom_q6v5_mss; do
 done
 
 echo "== services =="
-for u in sshd NetworkManager tqftpserv pd-mapper diag-router rmtfs modem-uim-init usb-net-debug zram-swap; do
+for u in sshd NetworkManager seatd phosh tqftpserv pd-mapper diag-router rmtfs modem-uim-init usb-net-debug zram-swap; do
     state=$(systemctl is-active "$u" 2>/dev/null || true)
     [ "$state" = "active" ] && ok "$u: active" || fail "$u: ${state:-unknown}"
 done
 
-echo "== console / on-device keyboard =="
+echo "== graphical session =="
+target=$(systemctl get-default 2>/dev/null || true)
+[ "$target" = "graphical.target" ] && ok "default target: graphical.target" \
+    || fail "default target: ${target:-unknown} (expected graphical.target)"
+
+state=$(systemctl is-active phosh 2>/dev/null || true)
+[ "$state" = "active" ] && ok "phosh: active" || fail "phosh: ${state:-unknown}"
+
+for p in phoc phosh squeekboard; do
+    if pgrep -x "$p" >/dev/null 2>&1; then
+        ok "session process: $p"
+    else
+        warn "session process not running: $p"
+    fi
+done
+
+# Adreno 512 needs the cairo renderer or GTK4 loses glyphs at random.
+gsk=$(tr '\0' '\n' < "/proc/$(pgrep -n phosh 2>/dev/null)/environ" 2>/dev/null | sed -n 's/^GSK_RENDERER=//p')
+[ "$gsk" = "cairo" ] && ok "GSK_RENDERER=cairo" \
+    || warn "GSK_RENDERER is '${gsk:-unset}' (glyph glitches are expected)"
+
 [ -d /var/log ] && ok "/var/log exists" || fail "/var/log missing (usb-net-debug needs it)"
+
+echo "== console fallback (tty2) =="
 [ -e /dev/fb0 ] && ok "framebuffer /dev/fb0 present" || warn "no /dev/fb0"
-[ -e /dev/uinput ] && ok "uinput present" || warn "no /dev/uinput"
-state=$(systemctl is-active fbkeyboard 2>/dev/null || true)
-[ "$state" = "active" ] && ok "fbkeyboard: active" \
-    || warn "fbkeyboard: ${state:-unknown} (headless builds only)"
-if grep -q 'Name="fbkeyboard"' /proc/bus/input/devices 2>/dev/null; then
-    ok "fbkeyboard virtual input device present"
-else
-    warn "fbkeyboard virtual input device missing"
-fi
 font=$(sed -n 's/^FONT=//p' /etc/vconsole.conf 2>/dev/null | head -n1)
 [ -n "$font" ] && ok "console font: $font" || warn "no FONT in /etc/vconsole.conf"
 

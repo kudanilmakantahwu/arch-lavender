@@ -1,12 +1,12 @@
 # userspace
 
 Everything in this directory is copied into the root filesystem by
-`rootfs/build-rootfs.sh`.  Two sets exist:
+`rootfs/build-rootfs.sh`:
 
-| Directory | Default? | Contents |
-| --- | --- | --- |
-| `base/` | always | Qualcomm modem/DIAG services, the UIM init script, USB networking debug fallback, and the ModemManager "no net port" patch. |
-| `gui-experimental/` | only with `--with-gui` | Phosh session unit, touch-zoom helper, and the wlroots layer-shell patch. |
+| Directory | Contents |
+| --- | --- |
+| `base/` | Qualcomm modem/DIAG services, the UIM init script, USB networking debug fallback, zram, and the ModemManager "no net port" patch. |
+| `gui/` | The Phosh systemd unit used by the default graphical session. |
 
 ## base
 
@@ -21,7 +21,6 @@ Everything in this directory is copied into the root filesystem by
 | `modem-uim-init.service` | Brings the modem online **and opens the primary UIM session**. Without this, ModemManager sees no SIM. |
 | `usb-net-debug.service` | Creates a USB RNDIS gadget at `172.16.42.1/24`, so SSH works over the USB cable before WiFi is configured. |
 | `zram-swap.service` | Creates a zram swap device (`zstd`) sized at half of RAM. Without swap, one large program can freeze a 6 GB phone for minutes. |
-| `fbkeyboard.service` | Draws an on-screen keyboard over the `tty1` framebuffer console, so you can log in on the phone itself without USB or an OTG keyboard. |
 
 `rmtfs.service` runs `/usr/local/sbin/qcom-mss-stop` first.  That script asks
 the modem to shut down cleanly so `rmtfs` can start it from scratch.  This is
@@ -66,37 +65,21 @@ it automatically after a package upgrade.
 `diag-router` from <https://github.com/linux-msm>.  The released rootfs already
 contains them; the script is here so the binaries are not a black box.
 
-## fbkeyboard
+## gui
 
-`base/bin/fbkeyboard` is the GPL-3.0 on-screen keyboard from
-<https://github.com/julianwi/fbkeyboard>, cross-compiled for aarch64.  The
-source and build script live in [`fbkeyboard/`](fbkeyboard/).  It is only
-enabled by the headless build; `--with-gui` leaves the keyboard to Phosh.
+`gui/systemd/phosh.service` starts Phosh on `tty1` as user `alarm`:
 
-The vendored source carries three fixes that upstream does not:
+- `phoc` compositor with `WLR_BACKENDS=drm,libinput`,
+- `LIBSEAT_BACKEND=seatd`,
+- `GSK_RENDERER=cairo`, because GTK4's NGL renderer loses glyphs at random on
+  the Adreno 512 (the same workaround postmarketOS uses on Adreno 5xx).
 
-- `int c` instead of `char c` for `getopt()`. On AArch64 `char` is unsigned,
-  so `(c = getopt(...)) != -1` is always true: the binary spins at 100 % CPU
-  and never opens `/dev/fb0`.
-- Glyphs are drawn at `hight*2/5` instead of `hight*3/4`, so labels such as
-  `shift`, `bksp` and `enter` stay inside their key cells.
-- The input read uses `poll()` with a 500 ms timeout and redraws on timeout.
-  `fbcon` repaints the whole screen whenever output scrolls, which otherwise
-  erases the keyboard until the next touch.
-
-`base/profile.d/fbkeyboard-rows.sh` is installed as
-`/etc/profile.d/fbkeyboard-rows.sh`. It measures the visible framebuffer height
-and the current tty row count, derives the console font height (the image uses
-a 16×32 font), and shrinks the tty rows so the shell prompt stays above the
-keyboard instead of scrolling underneath it.
+The build enables this unit and sets `default.target` to `graphical.target`.
+`getty@tty1` is disabled; `getty@tty2` remains available as a text-console
+fallback. There is no separate experimental/headless mode.
 
 ## Console font
 
 `rootfs/overlay/etc/vconsole.conf` sets `FONT=latarcyrheb-sun32` (16×32) so
-boot messages and logs are readable on the 1080×2340 panel. Override it there,
-or at runtime with `setfont -C /dev/tty1 <font>`.
-
-## gui-experimental
-
-See [`../docs/GUI-EXPERIMENTAL.md`](../docs/GUI-EXPERIMENTAL.md).  The GUI is
-opt-in and still buggy; the default install is headless.
+the `tty2` fallback console is readable on the 1080×2340 panel. Override it
+there, or at runtime with `setfont -C /dev/tty2 <font>`.

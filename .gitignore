@@ -1,10 +1,13 @@
 # build outputs
 kernel/out/
 kernel/src/
+# historical postmarketOS workspace (not part of the Arch image)
+pmos/
 __pycache__/
 *.pyc
 *.img
 *.sparse
+rootfs.img.*
 initramfs/initramfs-new.gz
 
 # downloaded release assets

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build the Qualcomm userspace helpers needed for the modem and DIAG.
 #
-# These are the binaries that the base (headless) install uses:
+# These are the binaries that the base install uses:
 #   qrtr-lookup  (libqrtr + tools)
 #   tqftpserv    (serves /usr/lib/firmware to the modem)
 #   rmtfs        (modem EFS storage)

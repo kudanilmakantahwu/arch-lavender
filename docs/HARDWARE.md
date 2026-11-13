@@ -24,7 +24,7 @@ $ cat /proc/device-tree/model
 Xiaomi Redmi Note 7 (Shenchao)
 
 $ uname -a
-Linux lave-arch 7.0.14-sdm660 #1 SMP PREEMPT ... aarch64 GNU/Linux
+Linux lave-arch 7.2.3-sdm660 #1 SMP PREEMPT ... aarch64 GNU/Linux
 ```
 
 ## Partition layout
@@ -107,7 +107,7 @@ The initramfs is a pmOS-style busybox image. It bundles:
 
 - `busybox`, `busybox-extras`, `blkid`, `e2fsck`, `resize2fs`, `kmod`,
   `switch_root`;
-- the full `7.0.14-sdm660` module tree;
+- the full `7.2.3-sdm660` module tree;
 - the firmware needed before `/usr` is mounted:
   - `ath10k/WCN3990/hw1.0/{firmware-5.bin,board-2.bin}`,
   - `qcom/a530_{pm4,pfp}.fw`, `qcom/a530v3_gpmu.fw2`,
