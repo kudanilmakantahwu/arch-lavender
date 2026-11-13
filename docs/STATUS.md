@@ -35,24 +35,24 @@ broken or untested, and is described in the sections below.
 | GPU (Adreno 512, a5xx) | Partial | 7.2.3 includes the upstream a5xx fixes |
 | Charging & Battery | Working | Standard charging and battery reporting work |
 | Offline Charging | Broken | System does not boot into offline charging mode |
-| Audio – Earpiece | Working | Can be used as phone speaker |
-| Audio – Microphone | Working | Works out of the box |
+| Audio – Earpiece | Broken | Currently reported broken |
+| Audio – Microphone | Broken | Currently reported broken |
 | Audio – Speaker | Broken | Main speaker is non-functional |
 | Modem & SIM Detection | Working | SIM **must** be in slot 1 |
 | LTE Registration | Working | Network registration succeeds |
 | SMS | Working | Via ModemManager / `mmcli` |
 | Cellular Data | Broken | Kernel lacks the SDM660 IPA driver (no data port) |
-| Phone Calls | Partial | Call setup works; audio routing is untested |
+| Phone Calls | Partial | Call setup works; audio is broken |
 | Package Management | Working | `pacman` and package updates work |
 | Bluetooth | Broken | `hci0` probes, but the stack does not work |
 | Vibration | Broken | No working vibrator device |
 | Flashlight / Torch | Broken | No working LED device |
-| Cameras | Untested | — |
-| Sensors | Untested | `qcom_sns_reg` fails to load firmware |
+| Cameras | Broken | — |
+| Sensors | Broken | `qcom_sns_reg` fails to load firmware |
 | Video Decoding | Untested | Hardware acceleration untested |
-| GPS | Untested | — |
+| GPS | Broken | — |
 | Suspend / Deep Sleep | Untested | — |
-| Fingerprint Sensor | Untested | — |
+| Fingerprint Sensor | Broken | — |
 | Phosh / GUI Session | Working | Default UI; cairo renderer works around the Adreno 512 glyph bug |
 
 ## Default session
@@ -83,7 +83,6 @@ network, and modem path are identical regardless of how the session is used.
 - Display and touchscreen (Shenchao panel)
 - GPU acceleration (Adreno 512) with the a5xx fixes — partial
 - Charging and battery reporting
-- Earpiece audio output and microphone input
 - Modem bring-up, SIM detection, LTE registration
 - SMS via ModemManager (`mmcli`)
 - `pacman` package management
@@ -105,14 +104,19 @@ IPA path.
 
 ### Phone call audio
 
-Call setup works (GNOME Calls / ModemManager). The earpiece and microphone work
-on their own, but audio routing during a live call was not verified. Treat
-calls as incomplete.
+Call setup works (GNOME Calls / ModemManager). Audio (earpiece, microphone,
+and speaker) is currently reported broken, so calls are incomplete.
+
+### Cameras, sensors, GPS, fingerprint
+
+These are present in the device tree but do not work yet. `qcom_sns_reg`
+fails to load `qcom/sensors/sns.reg*`, and there is no working camera, GNSS, or
+fingerprint path in this kernel/rootfs combination.
 
 ### Main speaker
 
-The earpiece works; the main loudspeaker does not. There is no working
-speaker path in this kernel/rootfs combination yet.
+The main loudspeaker is non-functional, along with the earpiece and microphone
+in the current build.
 
 ### Bluetooth
 
@@ -131,12 +135,8 @@ mode. Charge the phone while the system is booted.
 
 ## Not tested
 
-- Camera (front and back)
-- Sensors (`qcom_sns_reg` fails: missing `qcom/sensors/sns.reg*`)
 - Video decoding / hardware acceleration
-- GPS / GNSS
 - Suspend and deep sleep
-- Fingerprint sensor
 - USB host / OTG
 - IR blaster
 - Dual-SIM operation (only slot 1 was reliable)
