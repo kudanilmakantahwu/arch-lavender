@@ -3,8 +3,6 @@
 #
 #   modemmanager : allow QMI modem without a net/data port (sdm660 mainline
 #                  has no IPA/BAM data path) so SIM/SMS/registration work.
-#   wlroots0.20  : revert "layer-shell: error on 0 dimension without anchors"
-#                  so phosh's 0x0 bottom-anchored home layer is accepted.
 #
 # Triggered by /etc/pacman.d/hooks/99-local-patches.hook.
 
@@ -14,11 +12,6 @@ PATCHED=/usr/local/lib/patched
 if [ -f "$PATCHED/ModemManager" ]; then
     install -m755 "$PATCHED/ModemManager" /usr/bin/ModemManager
     install -m755 "$PATCHED/ModemManager" /usr/sbin/ModemManager
-fi
-
-if [ -f "$PATCHED/libwlroots-0.20.so" ]; then
-    install -m755 "$PATCHED/libwlroots-0.20.so" /usr/lib/libwlroots-0.20.so
-    ldconfig
 fi
 
 exit 0

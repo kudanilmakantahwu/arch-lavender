@@ -1,5 +1,5 @@
 name: build-kernel
-description: Build linux-postmarketos-qcom-sdm660 and package it for the Redmi Note 7
+description: Build the sdm660-mainline kernel and package it for the Redmi Note 7
 
 runs:
   using: composite
@@ -27,7 +27,7 @@ runs:
       run: |
         set -e
         cd kernel/out
-        KVER="7.0.14-sdm660"
+        KVER="7.2.3-sdm660"
         rm -f "linux-${KVER}.zip"
         zip -qr "linux-${KVER}.zip" \
           vmlinuz vmlinuz.efi System.map \
@@ -48,7 +48,7 @@ runs:
           --kernel kernel/out/vmlinuz \
           --dtb kernel/out/dtbs/qcom/sdm660-xiaomi-lavender-shenchao.dtb \
           --ramdisk "$INITRD" \
-          --out "kernel/out/boot-7.0.14-sdm660.img" \
+          --out "kernel/out/boot-7.2.3-sdm660.img" \
           --cmdline "console=tty0 loglevel=7 rootwait rw"
 
     - name: Checksums
@@ -62,7 +62,7 @@ runs:
       shell: bash
       run: |
         {
-          echo "## kernel 7.0.14-sdm660"
+          echo "## kernel 7.2.3-sdm660"
           echo
           echo '```'
           ls -lh kernel/out/vmlinuz kernel/out/linux-*.zip kernel/out/boot-*.img 2>/dev/null || true

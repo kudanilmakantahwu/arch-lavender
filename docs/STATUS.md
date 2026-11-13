@@ -5,23 +5,22 @@
 | | |
 | --- | --- |
 | Device | Redmi Note 7 (`lavender`, `shenchao` panel) |
-| Kernel | `7.0.14-sdm660` (tag `v7.0.14-sdm660` + patches 0001–0006) |
+| Kernel | `7.2.3-sdm660` (commit `e9b7cc51`, a5xx/wifi fixes included) |
 | Distro | Arch Linux ARM aarch64 |
 | Root filesystem | ext4, label `pmOS_root`, grown to 50 GiB |
 | Modem | Telkomsel, MCC/MNC `510/10`, LTE |
 | Boot | `fastboot flash userdata` + `fastboot flash boot` |
+| Default UI | Phosh on `graphical.target` (`tty1`), `getty@tty2` fallback |
 
 Package versions from the tested image:
 
 | Package | Version |
 | --- | --- |
 | `modemmanager` | `1.24.2-2` (patched, see below) |
-| `wlroots0.20` | `0.20.2-1` (patched for the experimental GUI) |
 | `phosh` | `0.57.0-2` |
 | `phoc` | `0.57.0-2` |
 | `squeekboard` | `1.43.1-6` |
 | `chatty` | `0.8.9-9` |
-| `gnome-calls` | `51.1-1` |
 
 ## Feature matrix
 
@@ -33,7 +32,7 @@ broken or untested, and is described in the sections below.
 | Boot / Reboot | Working | Stable system boot |
 | Wi-Fi | Working | WCN3990 / `ath10k` (2.4 GHz & 5 GHz) |
 | Display & Touchscreen | Working | Shenchao panel only |
-| GPU (Adreno 512, a5xx) | Partial | Works with patches 0001–0005 |
+| GPU (Adreno 512, a5xx) | Partial | 7.2.3 includes the upstream a5xx fixes |
 | Charging & Battery | Working | Standard charging and battery reporting work |
 | Offline Charging | Broken | System does not boot into offline charging mode |
 | Audio – Earpiece | Working | Can be used as phone speaker |
@@ -54,38 +53,35 @@ broken or untested, and is described in the sections below.
 | GPS | Untested | — |
 | Suspend / Deep Sleep | Untested | — |
 | Fingerprint Sensor | Untested | — |
-| Phosh / GUI Session | Experimental | Opt-in; see [`GUI-EXPERIMENTAL.md`](GUI-EXPERIMENTAL.md) |
+| Phosh / GUI Session | Working | Default UI; cairo renderer works around the Adreno 512 glyph bug |
 
-## Headless vs GUI
+## Default session
 
-The **headless** configuration is the default:
+The image boots into Phosh:
 
-- `default.target` → `multi-user.target`
-- `getty@tty1` enabled, not masked
-- Phosh and `touch-zoom` are not started
-- SSH over USB and WiFi, `NetworkManager`, and the modem stack are enabled
+- `default.target` → `graphical.target`
+- `phosh.service` enabled: phoc + Phosh on `tty1` as user `alarm`
+- `seatd`, `systemd-networkd`, `NetworkManager`, and `sshd` enabled
+- `getty@tty1` disabled so it cannot fight the compositor
+- `getty@tty2` enabled as a text-console fallback (Ctrl+Alt+F2)
+- `GSK_RENDERER=cairo` in both `/etc/environment` and the Phosh unit
 
-The system underneath is the same one that was tested on hardware. The only
-difference from the tested GUI session is the boot target and the two GUI
-units, so nothing in the kernel, rootfs, or modem path changes.
-
-The **GUI** configuration is opt-in (`--with-gui`) and experimental. Phosh
-starts and is usable, but it is not reliable enough to be the default. In the
-tested GUI install it would occasionally hard-lock and reboot. See
-[`GUI-EXPERIMENTAL.md`](GUI-EXPERIMENTAL.md).
+There is no separate text-only build and no opt-in flag. The kernel, rootfs, USB
+network, and modem path are identical regardless of how the session is used.
 
 ## Works
 
 - Boot, reboot, and shutdown
-- Console on `tty1` with a readable 16×32 font
-- `fbkeyboard` touch keyboard on `tty1` (headless build)
+- Phosh desktop on `tty1`, with squeekboard on-screen keyboard
+- Cairo renderer workaround for the GTK4/Adreno glyph bug
+- Console on `tty2` with a readable 16×32 font
 - SSH over USB RNDIS (`172.16.42.1`)
 - SSH over WiFi
 - zram compressed swap (`/dev/zram0`, half of RAM, `zstd`)
 - PC internet over USB (`scripts/nat.sh`)
 - WiFi 2.4 GHz and 5 GHz (`ath10k`, WCN3990)
 - Display and touchscreen (Shenchao panel)
-- GPU acceleration (Adreno 512) with the a5xx patches — partial
+- GPU acceleration (Adreno 512) with the a5xx fixes — partial
 - Charging and battery reporting
 - Earpiece audio output and microphone input
 - Modem bring-up, SIM detection, LTE registration
@@ -155,6 +151,7 @@ mode. Charge the phone while the system is booted.
 | WiFi dead after a disconnect | reboot; the `0006` patch prevents the firmware crash, but a wedged device still needs a reboot |
 | ModemManager patched binary lost after upgrade | `pacman` hook restores it from `/usr/local/lib/patched/ModemManager`; if the ABI changed, rebuild it |
 | Root filesystem needs repair | the initramfs runs `e2fsck -p`, then `e2fsck -f -y` |
+| GTK4 text loses random glyphs | `GSK_RENDERER=cairo` (already the default); restart `phosh` after changing it |
 
 ## Reporting a problem
 
@@ -168,4 +165,5 @@ systemctl --no-pager status modem-uim-init ModemManager rmtfs
 dmesg | tail -100
 ```
 
-and whether the phone is on the headless or experimental GUI target.
+and whether the session starts (check `systemctl status phosh` and
+`tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep GSK_RENDERER`).

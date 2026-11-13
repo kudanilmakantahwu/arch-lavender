@@ -31,10 +31,10 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-7.0.14-sdm660
+          name: linux-7.2.3-sdm660
           path: |
-            kernel/out/linux-7.0.14-sdm660.zip
-            kernel/out/boot-7.0.14-sdm660.img
+            kernel/out/linux-7.2.3-sdm660.zip
+            kernel/out/boot-7.2.3-sdm660.img
             kernel/out/sha256sums-kernel.txt
           if-no-files-found: error
           retention-days: 30
@@ -46,7 +46,7 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -e
-          KVER=7.0.14-sdm660
+          KVER=7.2.3-sdm660
           # Upload as -ci assets so a CI build can never overwrite the proven
           # boot image / kernel zip.  Promote them by hand after testing.
           cp "kernel/out/linux-${KVER}.zip" "kernel/out/linux-${KVER}-ci.zip"

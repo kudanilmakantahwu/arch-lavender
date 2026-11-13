@@ -1,14 +1,20 @@
 #!/bin/sh
-# Build linux-postmarketos-qcom-sdm660 inside an Alpine container.
+# Build the sdm660-mainline kernel inside an Alpine container.
 # Runs as root inside `alpine:edge`, with the repo mounted at /work.
+#
+# The running kernel is 7.2.3 from the `qcom-sdm660-7.2.y` branch.  The six
+# patches in kernel/patches/ are already upstream in this tree, so they are
+# skipped by default.  Set APPLY_PATCHES=1 when building an older tag that
+# still needs them.
 set -eu
 
-KVER="7.0.14"
+KVER="7.2.3"
+KCOMMIT="e9b7cc51f7944f3be7ac69dcf5caabc2429510dc"
 FLAVOR="postmarketos-qcom-sdm660"
-TAG="v${KVER}-sdm660"
-TARBALL="linux-${TAG}.tar.gz"
-URL="https://github.com/sdm660-mainline/linux/archive/refs/tags/${TAG}.tar.gz"
-SHA512="83f7e717b8adc9049e828a27629e7347be2fa0aef6c8404608059410cebaafa0c2659317b615634fbd5d83f9a245bcf1a64e5d2cd0d8e3ec8aeaa3dcf0e51298"
+TARBALL="linux-${KVER}-sdm660.tar.gz"
+URL="https://github.com/sdm660-mainline/linux/archive/${KCOMMIT}.tar.gz"
+SHA256="73564840ad5c0904aa65fdc9ba05e807c34406337c42da8f3983155f354b333f"
+APPLY_PATCHES="${APPLY_PATCHES:-0}"
 
 WORK=/work
 SRC="$WORK/src"
@@ -27,36 +33,40 @@ mkdir -p "$SRC" "$OUT"
 cd "$SRC"
 
 if [ ! -f "$TARBALL" ]; then
-	echo "== download $TAG =="
+	echo "== download $KCOMMIT =="
 	curl -fL --retry 3 --retry-delay 5 -o "$TARBALL" "$URL"
 fi
-echo "$SHA512  $TARBALL" | sha512sum -c -
+echo "$SHA256  $TARBALL" | sha256sum -c -
 
 echo "== extract =="
 tar -xzf "$TARBALL"
-BUILD="$SRC/linux-${KVER}-sdm660"
+BUILD="$SRC/linux-${KCOMMIT}"
 [ -d "$BUILD" ] || BUILD="$(find "$SRC" -maxdepth 1 -type d -name 'linux-*' | head -1)"
 echo "builddir: $BUILD"
 cd "$BUILD"
 
-echo "== apply patches =="
-ls -la "$WORK/patches" "$WORK/config" || true
-NPATCH=0
-for PATCH in $(find "$WORK/patches" -maxdepth 1 -name '*.patch' | sort); do
-	echo "applying: $PATCH"
-	patch -p1 --batch --forward --silent < "$PATCH" || true
-	NPATCH=$((NPATCH + 1))
-done
-[ "$NPATCH" -gt 0 ] || { echo "no patch found" >&2; exit 1; }
-if find . -name '*.rej' | grep -q .; then
-	echo "ERROR: patch(es) rejected:" >&2
-	find . -name '*.rej' >&2
-	exit 1
+if [ "$APPLY_PATCHES" -eq 1 ]; then
+	echo "== apply patches =="
+	NPATCH=0
+	for PATCH in $(find "$WORK/patches" -maxdepth 1 -name '*.patch' | sort); do
+		echo "applying: $PATCH"
+		patch -p1 --batch --forward --silent < "$PATCH" || true
+		NPATCH=$((NPATCH + 1))
+	done
+	[ "$NPATCH" -gt 0 ] || { echo "no patch found" >&2; exit 1; }
+	if find . -name '*.rej' | grep -q .; then
+		echo "ERROR: patch(es) rejected:" >&2
+		find . -name '*.rej' >&2
+		exit 1
+	fi
+	echo "applied $NPATCH patch(es)"
+else
+	echo "== patches: skipped (kernel ${KVER} already contains the a5xx/wifi fixes) =="
 fi
-echo "applied $NPATCH patch(es)"
 
 echo "== config =="
 cp -v "$WORK/config/config-${FLAVOR}.aarch64" .config
+make ARCH=arm64 LLVM=1 olddefconfig
 
 echo "== build =="
 make -j"$(nproc)" ARCH=arm64 LLVM=1 \
@@ -93,7 +103,7 @@ sha256sum "$MSM"
 
 echo "== version =="
 cat include/config/kernel.release
-strings "$OUT/vmlinuz" | grep -m1 -E '^7\.0\.14-sdm660' || true
+strings "$OUT/vmlinuz" | grep -m1 -E "^${KVER}-sdm660" || true
 
 echo "== done =="
 du -sh "$OUT"

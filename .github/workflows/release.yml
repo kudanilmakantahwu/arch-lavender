@@ -28,15 +28,17 @@ jobs:
         run: |
           set -e
           TAG="${GITHUB_REF_NAME}"
-          KVER=7.0.14-sdm660
+          KVER=7.2.3-sdm660
           cp "kernel/out/linux-${KVER}.zip" "kernel/out/linux-${KVER}-ci.zip"
           cp "kernel/out/boot-${KVER}.img" "kernel/out/boot-${KVER}-ci.img"
 
           NOTES=$(cat <<EOF
           Arch Linux ARM for the Redmi Note 7 (xiaomi-lavender), kernel ${KVER}.
 
-          **Default install is headless** (console on tty1). Phosh is experimental
-          and opt-in; see docs/GUI-EXPERIMENTAL.md.
+          **Default install boots straight into Phosh** on tty1.  SSH over USB
+          and WiFi stay enabled, and getty@tty2 is kept as a text-console
+          fallback (Ctrl+Alt+F2).  The cairo renderer workaround for the
+          Adreno 512 GTK4 glyph bug is applied by default.
 
           The \`-ci\` assets on this release were built by GitHub Actions from this
           tag.  Test them with \`fastboot boot boot-${KVER}-ci.img\` before

@@ -1,0 +1,4 @@
+# GTK4's NGL renderer loses glyphs on freedreno/Adreno 512 (random missing
+# letters in headers and buttons).  The cairo renderer is slower but correct;
+# postmarketOS applies the same workaround on Adreno 5xx devices.
+GSK_RENDERER=cairo
