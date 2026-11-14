@@ -72,7 +72,9 @@ contains them; the script is here so the binaries are not a black box.
 - `phoc` compositor with `WLR_BACKENDS=drm,libinput`,
 - `LIBSEAT_BACKEND=seatd`,
 - `GSK_RENDERER=cairo`, because GTK4's NGL renderer loses glyphs at random on
-  the Adreno 512 (the same workaround postmarketOS uses on Adreno 5xx).
+  the Adreno 512 (the same workaround postmarketOS uses on Adreno 5xx),
+- `FD_MESA_DEBUG=noubwc`, because UBWC compression corrupts Firefox/WebRender
+  buffers (magenta blocks, blank pages).
 
 The build enables this unit and sets `default.target` to `graphical.target`.
 `getty@tty1` is disabled; `getty@tty2` remains available as a text-console

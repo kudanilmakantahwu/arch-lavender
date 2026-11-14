@@ -23,6 +23,9 @@ Environment=WLR_BACKENDS=drm,libinput
 # random glyphs in headers and buttons.  Force the cairo renderer, the same
 # workaround postmarketOS uses for Adreno 5xx.
 Environment=GSK_RENDERER=cairo
+# Adreno 512 UBWC compression corrupts Firefox/WebRender buffers, producing
+# magenta blocks and blank surfaces.  Disable UBWC for the whole session.
+Environment=FD_MESA_DEBUG=noubwc
 ExecStartPre=/bin/sh -c 'for i in $(seq 1 100); do [ -S /run/user/1000/bus ] && exit 0; sleep 0.1; done; exit 0'
 ExecStart=/usr/bin/phosh-session
 Restart=always
