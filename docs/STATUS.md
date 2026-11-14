@@ -32,7 +32,7 @@ broken or untested, and is described in the sections below.
 | Boot / Reboot | Working | Stable system boot |
 | Wi-Fi | Working | WCN3990 / `ath10k` (2.4 GHz & 5 GHz) |
 | Display & Touchscreen | Working | Shenchao panel only |
-| GPU (Adreno 512, a5xx) | Partial | 7.2.3 includes the upstream a5xx fixes |
+| GPU (Adreno 512, a5xx) | Partial | 7.2.3 includes the upstream a5xx fixes; UBWC disabled for app compatibility |
 | Charging & Battery | Working | Standard charging and battery reporting work |
 | Offline Charging | Broken | System does not boot into offline charging mode |
 | Audio – Earpiece | Broken | Currently reported broken |
@@ -53,7 +53,7 @@ broken or untested, and is described in the sections below.
 | GPS | Broken | — |
 | Suspend / Deep Sleep | Untested | — |
 | Fingerprint Sensor | Broken | — |
-| Phosh / GUI Session | Working | Default UI; cairo renderer works around the Adreno 512 glyph bug |
+| Phosh / GUI Session | Working | Default UI; cairo renderer and `FD_MESA_DEBUG=noubwc` work around Adreno 512 glyph/UBWC bugs |
 
 ## Default session
 
@@ -65,6 +65,7 @@ The image boots into Phosh:
 - `getty@tty1` disabled so it cannot fight the compositor
 - `getty@tty2` enabled as a text-console fallback (Ctrl+Alt+F2)
 - `GSK_RENDERER=cairo` in both `/etc/environment` and the Phosh unit
+- `FD_MESA_DEBUG=noubwc` in both `/etc/environment` and the Phosh unit
 
 There is no separate text-only build and no opt-in flag. The kernel, rootfs, USB
 network, and modem path are identical regardless of how the session is used.
@@ -74,6 +75,7 @@ network, and modem path are identical regardless of how the session is used.
 - Boot, reboot, and shutdown
 - Phosh desktop on `tty1`, with squeekboard on-screen keyboard
 - Cairo renderer workaround for the GTK4/Adreno glyph bug
+- UBWC disabled for the session, so Firefox/WebRender and other GPU apps render correctly
 - Console on `tty2` with a readable 16×32 font
 - SSH over USB RNDIS (`172.16.42.1`)
 - SSH over WiFi
@@ -152,6 +154,7 @@ mode. Charge the phone while the system is booted.
 | ModemManager patched binary lost after upgrade | `pacman` hook restores it from `/usr/local/lib/patched/ModemManager`; if the ABI changed, rebuild it |
 | Root filesystem needs repair | the initramfs runs `e2fsck -p`, then `e2fsck -f -y` |
 | GTK4 text loses random glyphs | `GSK_RENDERER=cairo` (already the default); restart `phosh` after changing it |
+| Firefox shows magenta blocks or blank pages | `FD_MESA_DEBUG=noubwc` (already the default); restart `phosh` after changing it |
 
 ## Reporting a problem
 
@@ -166,4 +169,4 @@ dmesg | tail -100
 ```
 
 and whether the session starts (check `systemctl status phosh` and
-`tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep GSK_RENDERER`).
+`tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep -E 'GSK_RENDERER|FD_MESA_DEBUG'`).
