@@ -1,0 +1,1197 @@
+diff --git a/sound/soc/codecs/Kconfig b/sound/soc/codecs/Kconfig
+--- a/sound/soc/codecs/Kconfig
++++ b/sound/soc/codecs/Kconfig
+@@ -1453,6 +1453,14 @@
+ 	tristate "Maxim Integrated MAX98927 Speaker Amplifier"
+ 	depends on I2C
+ 
++config SND_SOC_MAX98937
++	tristate "Maxim Integrated MAX98937 Speaker Amplifier"
++	depends on I2C
++	help
++	  Enable support for the Maxim Integrated MAX98937 smart speaker
++	  amplifier.  The MAX98937 reuses the MAX98927 bit layouts but has a
++	  different register address map.
++
+ config SND_SOC_MAX98520
+ 	tristate "Maxim Integrated MAX98520 Speaker Amplifier"
+ 	depends on I2C
+diff --git a/sound/soc/codecs/Makefile b/sound/soc/codecs/Makefile
+--- a/sound/soc/codecs/Makefile
++++ b/sound/soc/codecs/Makefile
+@@ -175,6 +175,7 @@
+ snd-soc-max98925-y := max98925.o
+ snd-soc-max98926-y := max98926.o
+ snd-soc-max98927-y := max98927.o
++snd-soc-max98937-y := max98937.o
+ snd-soc-max98520-y := max98520.o
+ snd-soc-max98363-y := max98363.o
+ snd-soc-max98373-y := max98373.o
+@@ -612,6 +613,7 @@
+ obj-$(CONFIG_SND_SOC_MAX98925)	+= snd-soc-max98925.o
+ obj-$(CONFIG_SND_SOC_MAX98926)	+= snd-soc-max98926.o
+ obj-$(CONFIG_SND_SOC_MAX98927)	+= snd-soc-max98927.o
++obj-$(CONFIG_SND_SOC_MAX98937)	+= snd-soc-max98937.o
+ obj-$(CONFIG_SND_SOC_MAX98520)	+= snd-soc-max98520.o
+ obj-$(CONFIG_SND_SOC_MAX98363)	+= snd-soc-max98363.o
+ obj-$(CONFIG_SND_SOC_MAX98373)	+= snd-soc-max98373.o
+diff --git a/sound/soc/codecs/max98937.h b/sound/soc/codecs/max98937.h
+new file mode 100644
+--- /dev/null
++++ b/sound/soc/codecs/max98937.h
+@@ -0,0 +1,270 @@
++/* SPDX-License-Identifier: GPL-2.0-or-later */
++/*
++ * max98937.h  --  MAX98937 ALSA SoC Audio driver
++ *
++ * Derived from max98927.h (Copyright (C) 2016-2017 Maxim Integrated
++ * Products, Author: Ryan Lee <ryans.lee@maximintegrated.com>).
++ *
++ * The MAX98937 uses the same bit layouts as the MAX98927 but a different
++ * register address map (and a 16-bit extended register space for the
++ * revision ID at 0x0600).
++ */
++
++#ifndef _MAX98937_H
++#define _MAX98937_H
++
++/* Register Values */
++#define MAX98937_R0001_INT_RAW1 0x0001
++#define MAX98937_R0002_INT_RAW2 0x0002
++#define MAX98937_R0003_INT_RAW3 0x0003
++#define MAX98937_R0004_INT_STATE1 0x0004
++#define MAX98937_R0005_INT_STATE2 0x0005
++#define MAX98937_R0006_INT_STATE3 0x0006
++#define MAX98937_R0007_INT_FLAG1 0x0007
++#define MAX98937_R0008_INT_FLAG2 0x0008
++#define MAX98937_R0009_INT_FLAG3 0x0009
++#define MAX98937_R000A_INT_EN1 0x000A
++#define MAX98937_R000B_INT_EN2 0x000B
++#define MAX98937_R000C_INT_EN3 0x000C
++#define MAX98937_R000D_INT_FLAG_CLR1	0x000D
++#define MAX98937_R000E_INT_FLAG_CLR2	0x000E
++#define MAX98937_R000F_INT_FLAG_CLR3	0x000F
++#define MAX98937_R0010_IRQ_CTRL 0x0010
++#define MAX98937_R0011_CLK_MON 0x0011
++#define MAX98937_R0012_WDOG_CTRL 0x0012
++#define MAX98937_R0013_WDOG_RST 0x0013
++#define MAX98937_R0014_MEAS_ADC_THERM_WARN_THRESH 0x0014
++#define MAX98937_R0015_MEAS_ADC_THERM_SHDN_THRESH 0x0015
++#define MAX98937_R0016_MEAS_ADC_THERM_HYSTERESIS 0x0016
++#define MAX98937_R0017_PIN_CFG 0x0017
++#define MAX98937_R0018_PCM_RX_EN_A 0x0018
++#define MAX98937_R0019_PCM_RX_EN_B 0x0019
++#define MAX98937_R001A_PCM_TX_EN_A 0x001A
++#define MAX98937_R001B_PCM_TX_EN_B 0x001B
++#define MAX98937_R001C_PCM_TX_HIZ_CTRL_A 0x001C
++#define MAX98937_R001D_PCM_TX_HIZ_CTRL_B 0x001D
++#define MAX98937_R001E_PCM_TX_CH_SRC_A 0x001E
++#define MAX98937_R001F_PCM_TX_CH_SRC_B 0x001F
++#define MAX98937_R0020_PCM_STATUS_WORD_CFG0 0x0020
++#define MAX98937_R0021_PCM_STATUS_WORD_CFG1 0x0021
++#define MAX98937_R0022_PCM_STATUS_WORD_CFG2 0x0022
++#define MAX98937_R0023_PCM_MODE_CFG 0x0023
++#define MAX98937_R0024_PCM_MASTER_MODE 0x0024
++#define MAX98937_R0025_PCM_CLK_SETUP 0x0025
++#define MAX98937_R0026_PCM_SR_SETUP1 0x0026
++#define MAX98937_R0027_PCM_SR_SETUP2 0x0027
++#define MAX98937_R0028_PCM_TO_SPK_MONOMIX_A 0x0028
++#define MAX98937_R0029_PCM_TO_SPK_MONOMIX_B 0x0029
++#define MAX98937_R0035_PDM_RX_CTRL 0x0035
++#define MAX98937_R0036_AMP_VOL_CTRL 0x0036
++#define MAX98937_R0037_AMP_DSP_CFG 0x0037
++#define MAX98937_R0038_TONE_GEN_DC_CFG 0x0038
++#define MAX98937_R0039_AMP_ENABLES 0x0039
++#define MAX98937_R003A_SPK_SRC_SEL 0x003A
++#define MAX98937_R003B_SPK_GAIN 0x003B
++#define MAX98937_R003C_SSM_CFG 0x003C
++#define MAX98937_R003D_MEAS_EN 0x003D
++#define MAX98937_R003E_MEAS_DSP_CFG 0x003E
++#define MAX98937_R003F_BOOST_CTRL0 0x003F
++#define MAX98937_R0040_BOOST_CTRL3 0x0040
++#define MAX98937_R0041_BOOST_CTRL1 0x0041
++#define MAX98937_R0042_MEAS_ADC_CFG 0x0042
++#define MAX98937_R0043_MEAS_ADC_BASE_MSB 0x0043
++#define MAX98937_R0044_MEAS_ADC_BASE_LSB 0x0044
++#define MAX98937_R0045_ADC_CH0_DIVIDE 0x0045
++#define MAX98937_R0046_ADC_CH1_DIVIDE 0x0046
++#define MAX98937_R0047_ADC_CH2_DIVIDE 0x0047
++#define MAX98937_R0048_ADC_CH0_FILT_CFG 0x0048
++#define MAX98937_R0049_ADC_CH1_FILT_CFG 0x0049
++#define MAX98937_R004A_ADC_CH2_FILT_CFG 0x004A
++#define MAX98937_R004B_MEAS_ADC_CH0_READ 0x004B
++#define MAX98937_R004C_MEAS_ADC_CH1_READ 0x004C
++#define MAX98937_R004D_MEAS_ADC_CH2_READ 0x004D
++#define MAX98937_R004E_SQUELCH 0x004E
++#define MAX98937_R0051_BROWNOUT_STATUS 0x0051
++#define MAX98937_R0052_BROWNOUT_EN 0x0052
++#define MAX98937_R0053_BROWNOUT_INFINITE_HOLD 0x0053
++#define MAX98937_R0054_BROWNOUT_INFINITE_HOLD_CLR 0x0054
++#define MAX98937_R0055_BROWNOUT_LVL_HOLD 0x0055
++#define MAX98937_R0056_BROWNOUT_LVL1_THRESH 0x0056
++#define MAX98937_R0057_BROWNOUT_LVL2_THRESH 0x0057
++#define MAX98937_R0058_BROWNOUT_LVL3_THRESH 0x0058
++#define MAX98937_R0059_BROWNOUT_LVL4_THRESH 0x0059
++#define MAX98937_R005A_BROWNOUT_THRESH_HYSTERYSIS 0x005A
++#define MAX98937_R005B_BROWNOUT_AMP_LIMITER_ATK_REL 0x005B
++#define MAX98937_R005C_BROWNOUT_AMP_GAIN_ATK_REL 0x005C
++#define MAX98937_R005D_BROWNOUT_AMP1_CLIP_MODE 0x005D
++#define MAX98937_R005E_BROWNOUT_LVL1_CUR_LIMIT 0x005E
++#define MAX98937_R005F_BROWNOUT_LVL1_AMP1_CTRL1 0x005F
++#define MAX98937_R0060_BROWNOUT_LVL1_AMP1_CTRL2 0x0060
++#define MAX98937_R0061_BROWNOUT_LVL1_AMP1_CTRL3 0x0061
++#define MAX98937_R0062_BROWNOUT_LVL2_CUR_LIMIT 0x0062
++#define MAX98937_R0063_BROWNOUT_LVL2_AMP1_CTRL1 0x0063
++#define MAX98937_R0064_BROWNOUT_LVL2_AMP1_CTRL2 0x0064
++#define MAX98937_R0065_BROWNOUT_LVL2_AMP1_CTRL3 0x0065
++#define MAX98937_R0066_BROWNOUT_LVL3_CUR_LIMIT 0x0066
++#define MAX98937_R0067_BROWNOUT_LVL3_AMP1_CTRL1 0x0067
++#define MAX98937_R0068_BROWNOUT_LVL3_AMP1_CTRL2 0x0068
++#define MAX98937_R0069_BROWNOUT_LVL3_AMP1_CTRL3 0x0069
++#define MAX98937_R006A_BROWNOUT_LVL4_CUR_LIMIT 0x006A
++#define MAX98937_R006B_BROWNOUT_LVL4_AMP1_CTRL1 0x006B
++#define MAX98937_R006C_BROWNOUT_LVL4_AMP1_CTRL2 0x006C
++#define MAX98937_R006D_BROWNOUT_LVL4_AMP1_CTRL3 0x006D
++#define MAX98937_R0073_ENV_TRACK_VOUT_HEADROOM 0x0073
++#define MAX98937_R0074_ENV_TRACK_BOOST_VOUT_DELAY 0x0074
++#define MAX98937_R0075_ENV_TRACK_REL_RATE 0x0075
++#define MAX98937_R0076_ENV_TRACK_HOLD_RATE 0x0076
++#define MAX98937_R0077_ENV_TRACK_CTRL 0x0077
++#define MAX98937_R0078_ENV_TRACK_BOOST_VOUT_READ 0x0078
++#define MAX98937_R0079_BOOST_BYPASS_1 0x0079
++#define MAX98937_R007A_BOOST_BYPASS_2 0x007A
++#define MAX98937_R007B_BOOST_BYPASS_3 0x007B
++#define MAX98937_R0500_GLOBAL_EN 0x0500
++#define MAX98937_R0501_SOFT_RESET 0x0501
++#define MAX98937_R0600_REV_ID 0x0600
++
++/* MAX98937_R0018_PCM_RX_EN_A */
++#define MAX98937_PCM_RX_CH0_EN (0x1 << 0)
++#define MAX98937_PCM_RX_CH1_EN (0x1 << 1)
++#define MAX98937_PCM_RX_CH2_EN (0x1 << 2)
++#define MAX98937_PCM_RX_CH3_EN (0x1 << 3)
++#define MAX98937_PCM_RX_CH4_EN (0x1 << 4)
++#define MAX98937_PCM_RX_CH5_EN (0x1 << 5)
++#define MAX98937_PCM_RX_CH6_EN (0x1 << 6)
++#define MAX98937_PCM_RX_CH7_EN (0x1 << 7)
++
++/* MAX98937_R001A_PCM_TX_EN_A */
++#define MAX98937_PCM_TX_CH0_EN (0x1 << 0)
++#define MAX98937_PCM_TX_CH1_EN (0x1 << 1)
++#define MAX98937_PCM_TX_CH2_EN (0x1 << 2)
++#define MAX98937_PCM_TX_CH3_EN (0x1 << 3)
++#define MAX98937_PCM_TX_CH4_EN (0x1 << 4)
++#define MAX98937_PCM_TX_CH5_EN (0x1 << 5)
++#define MAX98937_PCM_TX_CH6_EN (0x1 << 6)
++#define MAX98937_PCM_TX_CH7_EN (0x1 << 7)
++
++/* MAX98937_R001E_PCM_TX_CH_SRC_A */
++#define MAX98937_PCM_TX_CH_SRC_A_V_SHIFT (0)
++#define MAX98937_PCM_TX_CH_SRC_A_I_SHIFT (4)
++
++/* MAX98937_R001F_PCM_TX_CH_SRC_B */
++#define MAX98937_PCM_TX_CH_INTERLEAVE_MASK (0x1 << 5)
++
++/* MAX98937_R0023_PCM_MODE_CFG */
++#define MAX98937_PCM_MODE_CFG_PCM_BCLKEDGE (0x1 << 2)
++#define MAX98937_PCM_MODE_CFG_FORMAT_MASK (0x7 << 3)
++#define MAX98937_PCM_MODE_CFG_FORMAT_SHIFT (3)
++#define MAX98937_PCM_FORMAT_I2S (0x0 << 0)
++#define MAX98937_PCM_FORMAT_LJ (0x1 << 0)
++#define MAX98937_PCM_FORMAT_TDM_MODE0 (0x3 << 0)
++#define MAX98937_PCM_FORMAT_TDM_MODE1 (0x4 << 0)
++#define MAX98937_PCM_FORMAT_TDM_MODE2 (0x5 << 0)
++#define MAX98937_PCM_MODE_CFG_CHANSZ_MASK (0x3 << 6)
++#define MAX98937_PCM_MODE_CFG_CHANSZ_16 (0x1 << 6)
++#define MAX98937_PCM_MODE_CFG_CHANSZ_24 (0x2 << 6)
++#define MAX98937_PCM_MODE_CFG_CHANSZ_32 (0x3 << 6)
++
++/* MAX98937_R0024_PCM_MASTER_MODE */
++#define MAX98937_PCM_MASTER_MODE_MASK (0x3 << 0)
++#define MAX98937_PCM_MASTER_MODE_SLAVE (0x0 << 0)
++#define MAX98937_PCM_MASTER_MODE_MASTER (0x3 << 0)
++
++#define MAX98937_PCM_MASTER_MODE_MCLK_MASK (0xF << 2)
++#define MAX98937_PCM_MASTER_MODE_MCLK_RATE_SHIFT (2)
++
++/* MAX98937_R0025_PCM_CLK_SETUP */
++#define MAX98937_PCM_CLK_SETUP_BSEL_MASK (0xF << 0)
++
++/* MAX98937_R0026_PCM_SR_SETUP1 */
++#define MAX98937_PCM_SR_SET1_SR_MASK (0xF << 0)
++
++#define MAX98937_PCM_SR_SET1_SR_8000 (0x0 << 0)
++#define MAX98937_PCM_SR_SET1_SR_11025 (0x1 << 0)
++#define MAX98937_PCM_SR_SET1_SR_12000 (0x2 << 0)
++#define MAX98937_PCM_SR_SET1_SR_16000 (0x3 << 0)
++#define MAX98937_PCM_SR_SET1_SR_22050 (0x4 << 0)
++#define MAX98937_PCM_SR_SET1_SR_24000 (0x5 << 0)
++#define MAX98937_PCM_SR_SET1_SR_32000 (0x6 << 0)
++#define MAX98937_PCM_SR_SET1_SR_44100 (0x7 << 0)
++#define MAX98937_PCM_SR_SET1_SR_48000 (0x8 << 0)
++
++/* MAX98937_R0027_PCM_SR_SETUP2 */
++#define MAX98937_PCM_SR_SET2_SR_MASK (0xF << 4)
++#define MAX98937_PCM_SR_SET2_SR_SHIFT (4)
++#define MAX98937_PCM_SR_SET2_IVADC_SR_MASK (0xf << 0)
++
++/* MAX98937_R0028_PCM_TO_SPK_MONOMIX_A */
++#define MAX98937_PCM_TO_SPK_MONOMIX_CFG_MASK (0x3 << 6)
++#define MAX98937_PCM_TO_SPK_MONOMIX_CFG_SHIFT (6)
++
++/* MAX98937_R0035_PDM_RX_CTRL */
++#define MAX98937_PDM_RX_EN_MASK (0x1 << 0)
++
++/* MAX98937_R0036_AMP_VOL_CTRL */
++#define MAX98937_AMP_VOL_SEL (0x1 << 7)
++#define MAX98937_AMP_VOL_SEL_WIDTH (1)
++#define MAX98937_AMP_VOL_SEL_SHIFT (7)
++#define MAX98937_AMP_VOL_MASK (0x7f << 0)
++#define MAX98937_AMP_VOL_WIDTH (7)
++#define MAX98937_AMP_VOL_SHIFT (0)
++
++/* MAX98937_R0037_AMP_DSP_CFG */
++#define MAX98937_AMP_DSP_CFG_DCBLK_EN (0x1 << 0)
++#define MAX98937_AMP_DSP_CFG_DITH_EN (0x1 << 1)
++#define MAX98937_AMP_DSP_CFG_RMP_BYPASS (0x1 << 4)
++#define MAX98937_AMP_DSP_CFG_DAC_INV (0x1 << 5)
++#define MAX98937_AMP_DSP_CFG_RMP_SHIFT (4)
++
++/* MAX98937_R0039_AMP_ENABLES */
++#define MAX98937_AMP_SPK_EN (0x1 << 0)
++#define MAX98937_AMP_EN_MASK (0x1 << 0)
++
++/* MAX98937_R003A_SPK_SRC_SEL */
++#define MAX98937_SPK_SRC_MASK (0x3 << 0)
++
++/* MAX98937_R003B_SPK_GAIN */
++#define MAX98937_SPK_PCM_GAIN_MASK (0x7 << 0)
++#define MAX98937_SPK_PDM_GAIN_MASK (0x7 << 4)
++#define MAX98937_SPK_GAIN_WIDTH (3)
++
++/* MAX98937_R003D_MEAS_EN */
++#define MAX98937_MEAS_V_EN (0x1 << 0)
++#define MAX98937_MEAS_I_EN (0x1 << 1)
++
++/* MAX98937_R003F_BOOST_CTRL0 */
++#define MAX98937_BOOST_CTRL0_VOUT_MASK (0x1f << 0)
++#define MAX98937_BOOST_CTRL0_PVDD_MASK (0x1 << 7)
++#define MAX98937_BOOST_CTRL0_PVDD_EN_SHIFT (7)
++
++/* MAX98937_R0052_BROWNOUT_EN */
++#define MAX98937_BROWNOUT_BDE_EN (0x1 << 0)
++#define MAX98937_BROWNOUT_AMP_EN (0x1 << 1)
++#define MAX98937_BROWNOUT_DSP_EN (0x1 << 2)
++#define MAX98937_BROWNOUT_DSP_SHIFT (2)
++
++/* MAX98937_R0500_GLOBAL_EN */
++#define MAX98937_GLOBAL_EN_MASK (0x1 << 0)
++
++/* MAX98937_R0501_SOFT_RESET */
++#define MAX98937_SOFT_RESET (0x1 << 0)
++
++/* MAX98937_R0600_REV_ID */
++#define MAX98937_REV_ID_MASK (0x1 << 6)
++
++struct max98937_priv {
++	struct regmap *regmap;
++	struct snd_soc_component *component;
++	struct gpio_desc *reset_gpio;
++	unsigned int spk_gain;
++	unsigned int sysclk;
++	unsigned int v_l_slot;
++	unsigned int i_l_slot;
++	bool interleave_mode;
++	unsigned int ch_size;
++	unsigned int rate;
++	unsigned int iface;
++	unsigned int provider;
++	unsigned int digital_gain;
++	bool tdm_mode;
++};
++#endif
+diff --git a/sound/soc/codecs/max98937.c b/sound/soc/codecs/max98937.c
+new file mode 100644
+--- /dev/null
++++ b/sound/soc/codecs/max98937.c
+@@ -0,0 +1,757 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++/*
++ * max98937.c  --  MAX98937 ALSA SoC Audio driver
++ *
++ * Derived from max98927.c:
++ *   Copyright (C) 2016-2017 Maxim Integrated Products
++ *   Author: Ryan Lee <ryans.lee@maximintegrated.com>
++ *
++ * The MAX98937 is register-address compatible with the MAX98927 only for
++ * the interrupt/PCM-enable block.  The PCM format, sample-rate, speaker
++ * enable/gain and boost registers live at different addresses, so the
++ * MAX98927 driver silently programs the wrong registers on a MAX98937.
++ * This driver uses the MAX98937 map and the vendor-provided initialisation
++ * sequences.
++ */
++
++#include <linux/acpi.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/regmap.h>
++#include <linux/slab.h>
++#include <sound/pcm.h>
++#include <sound/pcm_params.h>
++#include <sound/soc.h>
++#include <linux/gpio/consumer.h>
++#include <sound/tlv.h>
++#include "max98937.h"
++
++/*
++ * Initialisation sequence, taken from the vendor MAX98937 driver:
++ * first the per-channel map (single speaker, channel 0), then the common
++ * map.  Values are written verbatim; order matters.
++ */
++static const struct {
++	u16 reg;
++	u8 val;
++} max98937_init_seq[] = {
++	/* channel map */
++	{ MAX98937_R0040_BOOST_CTRL3,		0x01 },
++	{ MAX98937_R001E_PCM_TX_CH_SRC_A,	0x01 },
++	{ MAX98937_R0018_PCM_RX_EN_A,		0x03 },
++	{ MAX98937_R001A_PCM_TX_EN_A,		0x03 },
++	{ MAX98937_R001C_PCM_TX_HIZ_CTRL_A,	0xFC },
++	{ MAX98937_R0028_PCM_TO_SPK_MONOMIX_A,	0x80 },
++	{ MAX98937_R0029_PCM_TO_SPK_MONOMIX_B,	0x01 },
++
++	/* common map */
++	{ MAX98937_R0011_CLK_MON,		0x03 },
++	{ MAX98937_R0053_BROWNOUT_INFINITE_HOLD, 0x00 },
++	{ MAX98937_R0055_BROWNOUT_LVL_HOLD,	0x00 },
++	{ MAX98937_R005E_BROWNOUT_LVL1_CUR_LIMIT, 0x16 },
++	{ MAX98937_R005F_BROWNOUT_LVL1_AMP1_CTRL1, 0x00 },
++	{ MAX98937_R0060_BROWNOUT_LVL1_AMP1_CTRL2, 0x0c },
++	{ MAX98937_R0061_BROWNOUT_LVL1_AMP1_CTRL3, 0x0c },
++	{ MAX98937_R0062_BROWNOUT_LVL2_CUR_LIMIT, 0x12 },
++	{ MAX98937_R0063_BROWNOUT_LVL2_AMP1_CTRL1, 0x00 },
++	{ MAX98937_R0064_BROWNOUT_LVL2_AMP1_CTRL2, 0x0c },
++	{ MAX98937_R0065_BROWNOUT_LVL2_AMP1_CTRL3, 0x0c },
++	{ MAX98937_R0066_BROWNOUT_LVL3_CUR_LIMIT, 0x0e },
++	{ MAX98937_R0067_BROWNOUT_LVL3_AMP1_CTRL1, 0x03 },
++	{ MAX98937_R0068_BROWNOUT_LVL3_AMP1_CTRL2, 0x18 },
++	{ MAX98937_R0069_BROWNOUT_LVL3_AMP1_CTRL3, 0x18 },
++	{ MAX98937_R006A_BROWNOUT_LVL4_CUR_LIMIT, 0x0a },
++	{ MAX98937_R006B_BROWNOUT_LVL4_AMP1_CTRL1, 0x00 },
++	{ MAX98937_R006C_BROWNOUT_LVL4_AMP1_CTRL2, 0x80 },
++	{ MAX98937_R006D_BROWNOUT_LVL4_AMP1_CTRL3, 0x00 },
++	{ MAX98937_R005A_BROWNOUT_THRESH_HYSTERYSIS, 0x00 },
++	{ MAX98937_R005B_BROWNOUT_AMP_LIMITER_ATK_REL, 0x00 },
++	{ MAX98937_R005C_BROWNOUT_AMP_GAIN_ATK_REL, 0x1f },
++	{ MAX98937_R005D_BROWNOUT_AMP1_CLIP_MODE, 0x00 },
++	{ MAX98937_R0042_MEAS_ADC_CFG,		0x07 },
++	{ MAX98937_R0014_MEAS_ADC_THERM_WARN_THRESH, 0x75 },
++	{ MAX98937_R0015_MEAS_ADC_THERM_SHDN_THRESH, 0x8c },
++	{ MAX98937_R0016_MEAS_ADC_THERM_HYSTERESIS, 0x08 },
++	{ MAX98937_R0017_PIN_CFG,		0x55 },
++	{ MAX98937_R003E_MEAS_DSP_CFG,		0xF7 },
++	{ MAX98937_R0023_PCM_MODE_CFG,		0x40 },
++	{ MAX98937_R003A_SPK_SRC_SEL,		0x00 },
++	{ MAX98937_R001B_PCM_TX_EN_B,		0x00 },
++	{ MAX98937_R0019_PCM_RX_EN_B,		0x00 },
++	{ MAX98937_R001F_PCM_TX_CH_SRC_B,	0x03 },
++	{ MAX98937_R001D_PCM_TX_HIZ_CTRL_B,	0xFF },
++	{ MAX98937_R003D_MEAS_EN,		0x03 },
++	{ MAX98937_R0035_PDM_RX_CTRL,		0x00 },
++	{ MAX98937_R0036_AMP_VOL_CTRL,		0x38 },
++	{ MAX98937_R0037_AMP_DSP_CFG,		0x0f },
++	{ MAX98937_R003B_SPK_GAIN,		0x55 },
++	{ MAX98937_R003C_SSM_CFG,		0x85 },
++	{ MAX98937_R003F_BOOST_CTRL0,		0x1c },
++	{ MAX98937_R0041_BOOST_CTRL1,		0x40 },
++	{ MAX98937_R0043_MEAS_ADC_BASE_MSB,	0x00 },
++	{ MAX98937_R0044_MEAS_ADC_BASE_LSB,	0xFF },
++	{ MAX98937_R0073_ENV_TRACK_VOUT_HEADROOM, 0x0f },
++	{ MAX98937_R0077_ENV_TRACK_CTRL,	0x01 },
++	{ MAX98937_R0052_BROWNOUT_EN,		0x02 },
++	{ MAX98937_R0020_PCM_STATUS_WORD_CFG0,	0x00 },
++	{ MAX98937_R0021_PCM_STATUS_WORD_CFG1,	0x00 },
++	{ MAX98937_R0022_PCM_STATUS_WORD_CFG2,	0x00 },
++	{ MAX98937_R004E_SQUELCH,		0x10 },
++	{ MAX98937_R0079_BOOST_BYPASS_1,	0x45 },
++	{ MAX98937_R007A_BOOST_BYPASS_2,	0x2B },
++	{ MAX98937_R007B_BOOST_BYPASS_3,	0x04 },
++};
++
++static int max98937_apply_init_seq(struct max98937_priv *max98937)
++{
++	int i, ret;
++
++	for (i = 0; i < ARRAY_SIZE(max98937_init_seq); i++) {
++		ret = regmap_write(max98937->regmap,
++				   max98937_init_seq[i].reg,
++				   max98937_init_seq[i].val);
++		if (ret)
++			return ret;
++	}
++	return 0;
++}
++
++static int max98937_dai_set_fmt(struct snd_soc_dai *codec_dai, unsigned int fmt)
++{
++	struct snd_soc_component *component = codec_dai->component;
++	struct max98937_priv *max98937 = snd_soc_component_get_drvdata(component);
++	unsigned int mode = 0;
++	unsigned int format = 0;
++	bool use_pdm = false;
++	unsigned int invert = 0;
++
++	dev_dbg(component->dev, "%s: fmt 0x%08X\n", __func__, fmt);
++
++	switch (fmt & SND_SOC_DAIFMT_CLOCK_PROVIDER_MASK) {
++	case SND_SOC_DAIFMT_CBC_CFC:
++		max98937->provider = false;
++		mode = MAX98937_PCM_MASTER_MODE_SLAVE;
++		break;
++	case SND_SOC_DAIFMT_CBP_CFP:
++		max98937->provider = true;
++		mode = MAX98937_PCM_MASTER_MODE_MASTER;
++		break;
++	default:
++		dev_err(component->dev, "DAI clock mode unsupported\n");
++		return -EINVAL;
++	}
++
++	regmap_update_bits(max98937->regmap, MAX98937_R0024_PCM_MASTER_MODE,
++			   MAX98937_PCM_MASTER_MODE_MASK, mode);
++
++	switch (fmt & SND_SOC_DAIFMT_INV_MASK) {
++	case SND_SOC_DAIFMT_NB_NF:
++		break;
++	case SND_SOC_DAIFMT_IB_NF:
++		invert = MAX98937_PCM_MODE_CFG_PCM_BCLKEDGE;
++		break;
++	default:
++		dev_err(component->dev, "DAI invert mode unsupported\n");
++		return -EINVAL;
++	}
++
++	regmap_update_bits(max98937->regmap, MAX98937_R0023_PCM_MODE_CFG,
++			   MAX98937_PCM_MODE_CFG_PCM_BCLKEDGE, invert);
++
++	/* interface format */
++	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
++	case SND_SOC_DAIFMT_I2S:
++		format = MAX98937_PCM_FORMAT_I2S;
++		break;
++	case SND_SOC_DAIFMT_LEFT_J:
++		format = MAX98937_PCM_FORMAT_LJ;
++		break;
++	case SND_SOC_DAIFMT_DSP_A:
++		format = MAX98937_PCM_FORMAT_TDM_MODE1;
++		break;
++	case SND_SOC_DAIFMT_DSP_B:
++		format = MAX98937_PCM_FORMAT_TDM_MODE0;
++		break;
++	case SND_SOC_DAIFMT_PDM:
++		use_pdm = true;
++		break;
++	default:
++		return -EINVAL;
++	}
++	max98937->iface = fmt & SND_SOC_DAIFMT_FORMAT_MASK;
++
++	if (!use_pdm) {
++		/* pcm channel configuration */
++		regmap_update_bits(max98937->regmap, MAX98937_R0018_PCM_RX_EN_A,
++				   MAX98937_PCM_RX_CH0_EN | MAX98937_PCM_RX_CH1_EN,
++				   MAX98937_PCM_RX_CH0_EN | MAX98937_PCM_RX_CH1_EN);
++
++		regmap_update_bits(max98937->regmap,
++				   MAX98937_R0023_PCM_MODE_CFG,
++				   MAX98937_PCM_MODE_CFG_FORMAT_MASK,
++				   format << MAX98937_PCM_MODE_CFG_FORMAT_SHIFT);
++
++		regmap_update_bits(max98937->regmap, MAX98937_R003A_SPK_SRC_SEL,
++				   MAX98937_SPK_SRC_MASK, 0);
++
++		regmap_update_bits(max98937->regmap, MAX98937_R0035_PDM_RX_CTRL,
++				   MAX98937_PDM_RX_EN_MASK, 0);
++	} else {
++		/* pdm channel configuration */
++		regmap_update_bits(max98937->regmap, MAX98937_R0035_PDM_RX_CTRL,
++				   MAX98937_PDM_RX_EN_MASK, 1);
++
++		regmap_update_bits(max98937->regmap, MAX98937_R003A_SPK_SRC_SEL,
++				   MAX98937_SPK_SRC_MASK, 3);
++
++		regmap_update_bits(max98937->regmap, MAX98937_R0018_PCM_RX_EN_A,
++				   MAX98937_PCM_RX_CH0_EN | MAX98937_PCM_RX_CH1_EN,
++				   0);
++	}
++	return 0;
++}
++
++/* codec MCLK rate in master mode */
++static const int rate_table[] = {
++	5644800, 6000000, 6144000, 6500000,
++	9600000, 11289600, 12000000, 12288000,
++	13000000, 19200000,
++};
++
++/* BCLKs per LRCLK */
++static const int bclk_sel_table[] = {
++	32, 48, 64, 96, 128, 192, 256, 384, 512,
++};
++
++static int max98937_get_bclk_sel(int bclk)
++{
++	int i;
++	/* match BCLKs per LRCLK */
++	for (i = 0; i < ARRAY_SIZE(bclk_sel_table); i++) {
++		if (bclk_sel_table[i] == bclk)
++			return i + 2;
++	}
++	return 0;
++}
++
++static int max98937_set_clock(struct max98937_priv *max98937,
++	struct snd_pcm_hw_params *params)
++{
++	struct snd_soc_component *component = max98937->component;
++	/* BCLK/LRCLK ratio calculation */
++	int blr_clk_ratio = params_channels(params) * max98937->ch_size;
++	int value;
++
++	if (max98937->provider) {
++		int i;
++		/* match rate to closest value */
++		for (i = 0; i < ARRAY_SIZE(rate_table); i++) {
++			if (rate_table[i] >= max98937->sysclk)
++				break;
++		}
++		if (i == ARRAY_SIZE(rate_table)) {
++			dev_err(component->dev, "failed to find proper clock rate.\n");
++			return -EINVAL;
++		}
++		regmap_update_bits(max98937->regmap,
++				   MAX98937_R0024_PCM_MASTER_MODE,
++				   MAX98937_PCM_MASTER_MODE_MCLK_MASK,
++				   i << MAX98937_PCM_MASTER_MODE_MCLK_RATE_SHIFT);
++	}
++
++	if (!max98937->tdm_mode) {
++		/* BCLK configuration */
++		value = max98937_get_bclk_sel(blr_clk_ratio);
++		if (!value) {
++			dev_err(component->dev, "format unsupported %d\n",
++				params_format(params));
++			return -EINVAL;
++		}
++
++		regmap_update_bits(max98937->regmap,
++				   MAX98937_R0025_PCM_CLK_SETUP,
++				   MAX98937_PCM_CLK_SETUP_BSEL_MASK, value);
++	}
++	return 0;
++}
++
++static int max98937_dai_hw_params(struct snd_pcm_substream *substream,
++	struct snd_pcm_hw_params *params,
++	struct snd_soc_dai *dai)
++{
++	struct snd_soc_component *component = dai->component;
++	struct max98937_priv *max98937 = snd_soc_component_get_drvdata(component);
++	unsigned int sampling_rate = 0;
++	unsigned int chan_sz = 0;
++
++	/* pcm mode configuration */
++	switch (snd_pcm_format_width(params_format(params))) {
++	case 16:
++		chan_sz = MAX98937_PCM_MODE_CFG_CHANSZ_16;
++		break;
++	case 24:
++		chan_sz = MAX98937_PCM_MODE_CFG_CHANSZ_24;
++		break;
++	case 32:
++		chan_sz = MAX98937_PCM_MODE_CFG_CHANSZ_32;
++		break;
++	default:
++		dev_err(component->dev, "format unsupported %d\n",
++			params_format(params));
++		goto err;
++	}
++
++	max98937->ch_size = snd_pcm_format_width(params_format(params));
++
++	regmap_update_bits(max98937->regmap, MAX98937_R0023_PCM_MODE_CFG,
++			   MAX98937_PCM_MODE_CFG_CHANSZ_MASK, chan_sz);
++
++	dev_dbg(component->dev, "format supported %d",
++		params_format(params));
++
++	/* sampling rate configuration */
++	switch (params_rate(params)) {
++	case 8000:
++		sampling_rate = MAX98937_PCM_SR_SET1_SR_8000;
++		break;
++	case 11025:
++		sampling_rate = MAX98937_PCM_SR_SET1_SR_11025;
++		break;
++	case 12000:
++		sampling_rate = MAX98937_PCM_SR_SET1_SR_12000;
++		break;
++	case 16000:
++		sampling_rate = MAX98937_PCM_SR_SET1_SR_16000;
++		break;
++	case 22050:
++		sampling_rate = MAX98937_PCM_SR_SET1_SR_22050;
++		break;
++	case 24000:
++		sampling_rate = MAX98937_PCM_SR_SET1_SR_24000;
++		break;
++	case 32000:
++		sampling_rate = MAX98937_PCM_SR_SET1_SR_32000;
++		break;
++	case 44100:
++		sampling_rate = MAX98937_PCM_SR_SET1_SR_44100;
++		break;
++	case 48000:
++		sampling_rate = MAX98937_PCM_SR_SET1_SR_48000;
++		break;
++	default:
++		dev_err(component->dev, "rate %d not supported\n",
++			params_rate(params));
++		goto err;
++	}
++	/* set DAI_SR to correct LRCLK frequency */
++	regmap_update_bits(max98937->regmap, MAX98937_R0026_PCM_SR_SETUP1,
++			   MAX98937_PCM_SR_SET1_SR_MASK, sampling_rate);
++	regmap_update_bits(max98937->regmap, MAX98937_R0027_PCM_SR_SETUP2,
++			   MAX98937_PCM_SR_SET2_SR_MASK,
++			   sampling_rate << MAX98937_PCM_SR_SET2_SR_SHIFT);
++
++	/* set sampling rate of IV */
++	if (max98937->interleave_mode &&
++	    sampling_rate > MAX98937_PCM_SR_SET1_SR_16000)
++		regmap_update_bits(max98937->regmap,
++				   MAX98937_R0027_PCM_SR_SETUP2,
++				   MAX98937_PCM_SR_SET2_IVADC_SR_MASK,
++				   sampling_rate - 3);
++	else
++		regmap_update_bits(max98937->regmap,
++				   MAX98937_R0027_PCM_SR_SETUP2,
++				   MAX98937_PCM_SR_SET2_IVADC_SR_MASK,
++				   sampling_rate);
++	return max98937_set_clock(max98937, params);
++err:
++	return -EINVAL;
++}
++
++static int max98937_dai_tdm_slot(struct snd_soc_dai *dai,
++	unsigned int tx_mask, unsigned int rx_mask,
++	int slots, int slot_width)
++{
++	struct snd_soc_component *component = dai->component;
++	struct max98937_priv *max98937 = snd_soc_component_get_drvdata(component);
++	int bsel = 0;
++	unsigned int chan_sz = 0;
++
++	max98937->tdm_mode = true;
++
++	/* BCLK configuration */
++	bsel = max98937_get_bclk_sel(slots * slot_width);
++	if (bsel == 0) {
++		dev_err(component->dev, "BCLK %d not supported\n",
++			slots * slot_width);
++		return -EINVAL;
++	}
++
++	regmap_update_bits(max98937->regmap, MAX98937_R0025_PCM_CLK_SETUP,
++			   MAX98937_PCM_CLK_SETUP_BSEL_MASK, bsel);
++
++	/* Channel size configuration */
++	switch (slot_width) {
++	case 16:
++		chan_sz = MAX98937_PCM_MODE_CFG_CHANSZ_16;
++		break;
++	case 24:
++		chan_sz = MAX98937_PCM_MODE_CFG_CHANSZ_24;
++		break;
++	case 32:
++		chan_sz = MAX98937_PCM_MODE_CFG_CHANSZ_32;
++		break;
++	default:
++		dev_err(component->dev, "format unsupported %d\n",
++			slot_width);
++		return -EINVAL;
++	}
++
++	regmap_update_bits(max98937->regmap, MAX98937_R0023_PCM_MODE_CFG,
++			   MAX98937_PCM_MODE_CFG_CHANSZ_MASK, chan_sz);
++
++	/* Rx slot configuration */
++	regmap_write(max98937->regmap, MAX98937_R0018_PCM_RX_EN_A,
++		     rx_mask & 0xFF);
++	regmap_write(max98937->regmap, MAX98937_R0019_PCM_RX_EN_B,
++		     (rx_mask & 0xFF00) >> 8);
++
++	/* Tx slot configuration */
++	regmap_write(max98937->regmap, MAX98937_R001A_PCM_TX_EN_A,
++		     tx_mask & 0xFF);
++	regmap_write(max98937->regmap, MAX98937_R001B_PCM_TX_EN_B,
++		     (tx_mask & 0xFF00) >> 8);
++
++	/* Tx slot Hi-Z configuration */
++	regmap_write(max98937->regmap, MAX98937_R001C_PCM_TX_HIZ_CTRL_A,
++		     ~tx_mask & 0xFF);
++	regmap_write(max98937->regmap, MAX98937_R001D_PCM_TX_HIZ_CTRL_B,
++		     (~tx_mask & 0xFF00) >> 8);
++
++	return 0;
++}
++
++#define MAX98937_RATES SNDRV_PCM_RATE_8000_48000
++
++#define MAX98937_FORMATS (SNDRV_PCM_FMTBIT_S16_LE | \
++	SNDRV_PCM_FMTBIT_S24_LE | SNDRV_PCM_FMTBIT_S32_LE)
++
++static int max98937_dai_set_sysclk(struct snd_soc_dai *dai,
++	int clk_id, unsigned int freq, int dir)
++{
++	struct snd_soc_component *component = dai->component;
++	struct max98937_priv *max98937 = snd_soc_component_get_drvdata(component);
++
++	max98937->sysclk = freq;
++	return 0;
++}
++
++static const struct snd_soc_dai_ops max98937_dai_ops = {
++	.set_sysclk = max98937_dai_set_sysclk,
++	.set_fmt = max98937_dai_set_fmt,
++	.hw_params = max98937_dai_hw_params,
++	.set_tdm_slot = max98937_dai_tdm_slot,
++};
++
++static int max98937_dac_event(struct snd_soc_dapm_widget *w,
++	struct snd_kcontrol *kcontrol, int event)
++{
++	struct snd_soc_component *component = snd_soc_dapm_to_component(w->dapm);
++	struct max98937_priv *max98937 = snd_soc_component_get_drvdata(component);
++
++	switch (event) {
++	case SND_SOC_DAPM_PRE_PMU:
++		max98937->tdm_mode = false;
++		break;
++	case SND_SOC_DAPM_POST_PMU:
++		/*
++		 * The MAX98937 keeps a separate global enable in the extended
++		 * register space (0x0500).  The part stays muted until it is
++		 * set, even with SPK_EN asserted.
++		 */
++		regmap_update_bits(max98937->regmap, MAX98937_R0039_AMP_ENABLES,
++				   MAX98937_AMP_EN_MASK, 1);
++		regmap_update_bits(max98937->regmap, MAX98937_R0500_GLOBAL_EN,
++				   MAX98937_GLOBAL_EN_MASK, 1);
++		break;
++	case SND_SOC_DAPM_POST_PMD:
++		regmap_update_bits(max98937->regmap, MAX98937_R0500_GLOBAL_EN,
++				   MAX98937_GLOBAL_EN_MASK, 0);
++		regmap_update_bits(max98937->regmap, MAX98937_R0039_AMP_ENABLES,
++				   MAX98937_AMP_EN_MASK, 0);
++		break;
++	default:
++		return 0;
++	}
++	return 0;
++}
++
++static const char * const max98937_switch_text[] = {
++	"Left", "Right", "LeftRight"};
++
++static const struct soc_enum dai_sel_enum =
++	SOC_ENUM_SINGLE(MAX98937_R0028_PCM_TO_SPK_MONOMIX_A,
++			MAX98937_PCM_TO_SPK_MONOMIX_CFG_SHIFT, 3,
++			max98937_switch_text);
++
++static const struct snd_kcontrol_new max98937_dai_controls =
++	SOC_DAPM_ENUM("DAI Sel", dai_sel_enum);
++
++static const struct snd_kcontrol_new max98937_vi_control =
++	SOC_DAPM_SINGLE("Switch", MAX98937_R003E_MEAS_DSP_CFG, 2, 1, 0);
++
++static const struct snd_soc_dapm_widget max98937_dapm_widgets[] = {
++	SND_SOC_DAPM_DAC_E("Amp Enable", "HiFi Playback",
++			   MAX98937_R0039_AMP_ENABLES,
++			   0, 0, max98937_dac_event,
++			   SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_POST_PMD),
++	SND_SOC_DAPM_MUX("DAI Sel Mux", SND_SOC_NOPM, 0, 0,
++			 &max98937_dai_controls),
++	SND_SOC_DAPM_OUTPUT("BE_OUT"),
++	SND_SOC_DAPM_AIF_OUT("Voltage Sense", "HiFi Capture",  0,
++			     MAX98937_R003D_MEAS_EN, 0, 0),
++	SND_SOC_DAPM_AIF_OUT("Current Sense", "HiFi Capture",  0,
++			     MAX98937_R003D_MEAS_EN, 1, 0),
++	SND_SOC_DAPM_SWITCH("VI Sense", SND_SOC_NOPM, 0, 0,
++			    &max98937_vi_control),
++	SND_SOC_DAPM_SIGGEN("VMON"),
++	SND_SOC_DAPM_SIGGEN("IMON"),
++};
++
++static DECLARE_TLV_DB_SCALE(max98937_spk_tlv, 300, 300, 0);
++static DECLARE_TLV_DB_SCALE(max98937_digital_tlv, -1600, 25, 0);
++
++static const char * const max98937_boost_voltage_text[] = {
++	"6.5V", "6.625V", "6.75V", "6.875V", "7V", "7.125V", "7.25V", "7.375V",
++	"7.5V", "7.625V", "7.75V", "7.875V", "8V", "8.125V", "8.25V", "8.375V",
++	"8.5V", "8.625V", "8.75V", "8.875V", "9V", "9.125V", "9.25V", "9.375V",
++	"9.5V", "9.625V", "9.75V", "9.875V", "10V"
++};
++
++static SOC_ENUM_SINGLE_DECL(max98937_boost_voltage,
++		MAX98937_R003F_BOOST_CTRL0, 0,
++		max98937_boost_voltage_text);
++
++static const char * const max98937_current_limit_text[] = {
++	"1.00A", "1.10A", "1.20A", "1.30A", "1.40A", "1.50A", "1.60A", "1.70A",
++	"1.80A", "1.90A", "2.00A", "2.10A", "2.20A", "2.30A", "2.40A", "2.50A",
++	"2.60A", "2.70A", "2.80A", "2.90A", "3.00A", "3.10A", "3.20A", "3.30A",
++	"3.40A", "3.50A", "3.60A", "3.70A", "3.80A", "3.90A", "4.00A", "4.10A"
++};
++
++static SOC_ENUM_SINGLE_DECL(max98937_current_limit,
++		MAX98937_R0041_BOOST_CTRL1, 1,
++		max98937_current_limit_text);
++
++static const struct snd_kcontrol_new max98937_snd_controls[] = {
++	SOC_SINGLE_TLV("Speaker Volume", MAX98937_R003B_SPK_GAIN, 0, 6, 0,
++		       max98937_spk_tlv),
++	SOC_SINGLE_TLV("Digital Volume", MAX98937_R0036_AMP_VOL_CTRL,
++		       0, (1 << MAX98937_AMP_VOL_WIDTH) - 1, 0,
++		       max98937_digital_tlv),
++	SOC_SINGLE("Amp DSP Switch", MAX98937_R0052_BROWNOUT_EN,
++		   MAX98937_BROWNOUT_DSP_SHIFT, 1, 0),
++	SOC_SINGLE("Ramp Switch", MAX98937_R0037_AMP_DSP_CFG,
++		   MAX98937_AMP_DSP_CFG_RMP_SHIFT, 1, 0),
++	SOC_SINGLE("Volume Location Switch", MAX98937_R0036_AMP_VOL_CTRL,
++		   MAX98937_AMP_VOL_SEL_SHIFT, 1, 0),
++	SOC_ENUM("Boost Output Voltage", max98937_boost_voltage),
++	SOC_ENUM("Current Limit", max98937_current_limit),
++};
++
++static const struct snd_soc_dapm_route max98937_audio_map[] = {
++	/* Playback */
++	{"DAI Sel Mux", "Left", "Amp Enable"},
++	{"DAI Sel Mux", "Right", "Amp Enable"},
++	{"DAI Sel Mux", "LeftRight", "Amp Enable"},
++	{"BE_OUT", NULL, "DAI Sel Mux"},
++	/* Capture */
++	{ "VI Sense", "Switch", "VMON" },
++	{ "VI Sense", "Switch", "IMON" },
++	{ "Voltage Sense", NULL, "VI Sense" },
++	{ "Current Sense", NULL, "VI Sense" },
++};
++
++static struct snd_soc_dai_driver max98937_dai[] = {
++	{
++		.name = "max98937-aif1",
++		.playback = {
++			.stream_name = "HiFi Playback",
++			.channels_min = 1,
++			.channels_max = 2,
++			.rates = MAX98937_RATES,
++			.formats = MAX98937_FORMATS,
++		},
++		.capture = {
++			.stream_name = "HiFi Capture",
++			.channels_min = 1,
++			.channels_max = 2,
++			.rates = MAX98937_RATES,
++			.formats = MAX98937_FORMATS,
++		},
++		.ops = &max98937_dai_ops,
++	},
++};
++
++static int max98937_probe(struct snd_soc_component *component)
++{
++	struct max98937_priv *max98937 = snd_soc_component_get_drvdata(component);
++
++	max98937->component = component;
++
++	/* Apply the MAX98937 vendor initialisation map */
++	return max98937_apply_init_seq(max98937);
++}
++
++static const struct snd_soc_component_driver soc_component_dev_max98937 = {
++	.probe			= max98937_probe,
++	.controls		= max98937_snd_controls,
++	.num_controls		= ARRAY_SIZE(max98937_snd_controls),
++	.dapm_widgets		= max98937_dapm_widgets,
++	.num_dapm_widgets	= ARRAY_SIZE(max98937_dapm_widgets),
++	.dapm_routes		= max98937_audio_map,
++	.num_dapm_routes	= ARRAY_SIZE(max98937_audio_map),
++	.idle_bias_on		= 1,
++	.use_pmdown_time	= 1,
++	.endianness		= 1,
++};
++
++static const struct regmap_config max98937_regmap = {
++	.reg_bits	= 16,
++	.val_bits	= 8,
++	.max_register	= MAX98937_R0600_REV_ID,
++	.cache_type	= REGCACHE_NONE,
++};
++
++static void max98937_slot_config(struct i2c_client *i2c,
++	struct max98937_priv *max98937)
++{
++	int value;
++	struct device *dev = &i2c->dev;
++
++	if (!device_property_read_u32(dev, "vmon-slot-no", &value))
++		max98937->v_l_slot = value & 0xF;
++	else
++		max98937->v_l_slot = 0;
++
++	if (!device_property_read_u32(dev, "imon-slot-no", &value))
++		max98937->i_l_slot = value & 0xF;
++	else
++		max98937->i_l_slot = 1;
++}
++
++static int max98937_i2c_probe(struct i2c_client *i2c)
++{
++	int ret = 0, value;
++	int reg = 0;
++	struct max98937_priv *max98937 = NULL;
++
++	max98937 = devm_kzalloc(&i2c->dev, sizeof(*max98937), GFP_KERNEL);
++	if (!max98937)
++		return -ENOMEM;
++	i2c_set_clientdata(i2c, max98937);
++
++	/* update interleave mode info */
++	if (of_property_read_bool(i2c->dev.of_node, "maxim,interleave-mode")) {
++		max98937->interleave_mode = true;
++	} else {
++		if (!of_property_read_u32(i2c->dev.of_node, "interleave_mode",
++					  &value))
++			if (value > 0)
++				max98937->interleave_mode = true;
++	}
++
++	/* regmap initialization */
++	max98937->regmap = devm_regmap_init_i2c(i2c, &max98937_regmap);
++	if (IS_ERR(max98937->regmap)) {
++		ret = PTR_ERR(max98937->regmap);
++		dev_err(&i2c->dev,
++			"Failed to allocate regmap: %d\n", ret);
++		return ret;
++	}
++
++	max98937->reset_gpio = devm_gpiod_get_optional(&i2c->dev, "reset",
++						       GPIOD_OUT_HIGH);
++	if (IS_ERR(max98937->reset_gpio)) {
++		ret = PTR_ERR(max98937->reset_gpio);
++		return dev_err_probe(&i2c->dev, ret,
++				     "failed to request GPIO reset pin");
++	}
++
++	if (max98937->reset_gpio) {
++		gpiod_set_value_cansleep(max98937->reset_gpio, 0);
++		/* Wait for i2c port to be ready */
++		usleep_range(5000, 6000);
++	}
++
++	/* Check Revision ID (MAX98937 extended register space) */
++	ret = regmap_read(max98937->regmap, MAX98937_R0600_REV_ID, &reg);
++	if (ret < 0) {
++		dev_err(&i2c->dev,
++			"Failed to read: 0x%02X\n", MAX98937_R0600_REV_ID);
++		return ret;
++	}
++	dev_info(&i2c->dev, "MAX98937 revisionID: 0x%02X\n", reg);
++	if (!(reg & MAX98937_REV_ID_MASK))
++		dev_warn(&i2c->dev,
++			 "revision 0x%02X does not look like a MAX98937\n", reg);
++
++	/* voltage/current slot configuration */
++	max98937_slot_config(i2c, max98937);
++
++	/* codec registration */
++	ret = devm_snd_soc_register_component(&i2c->dev,
++		&soc_component_dev_max98937,
++		max98937_dai, ARRAY_SIZE(max98937_dai));
++	if (ret < 0)
++		dev_err(&i2c->dev, "Failed to register component: %d\n", ret);
++
++	return ret;
++}
++
++static void max98937_i2c_remove(struct i2c_client *i2c)
++{
++	struct max98937_priv *max98937 = i2c_get_clientdata(i2c);
++
++	if (max98937->reset_gpio)
++		gpiod_set_value_cansleep(max98937->reset_gpio, 1);
++}
++
++static const struct i2c_device_id max98937_i2c_id[] = {
++	{ .name = "max98937" },
++	{ }
++};
++
++MODULE_DEVICE_TABLE(i2c, max98937_i2c_id);
++
++#if defined(CONFIG_OF)
++static const struct of_device_id max98937_of_match[] = {
++	{ .compatible = "maxim,max98937" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, max98937_of_match);
++#endif
++
++#ifdef CONFIG_ACPI
++static const struct acpi_device_id max98937_acpi_match[] = {
++	{ "MX98937", 0 },
++	{},
++};
++MODULE_DEVICE_TABLE(acpi, max98937_acpi_match);
++#endif
++
++static struct i2c_driver max98937_i2c_driver = {
++	.driver = {
++		.name = "max98937",
++		.of_match_table = of_match_ptr(max98937_of_match),
++		.acpi_match_table = ACPI_PTR(max98937_acpi_match),
++	},
++	.probe = max98937_i2c_probe,
++	.remove = max98937_i2c_remove,
++	.id_table = max98937_i2c_id,
++};
++
++module_i2c_driver(max98937_i2c_driver)
++
++MODULE_DESCRIPTION("ALSA SoC MAX98937 driver");
++MODULE_AUTHOR("Ryan Lee <ryans.lee@maximintegrated.com>");
++MODULE_LICENSE("GPL");
+diff --git a/arch/arm64/boot/dts/qcom/sdm660-xiaomi-lavender-common.dtsi b/arch/arm64/boot/dts/qcom/sdm660-xiaomi-lavender-common.dtsi
+--- a/arch/arm64/boot/dts/qcom/sdm660-xiaomi-lavender-common.dtsi
++++ b/arch/arm64/boot/dts/qcom/sdm660-xiaomi-lavender-common.dtsi
+@@ -9,6 +9,7 @@
+ #include "sdm660.dtsi"
+ #include "pm660.dtsi"
+ #include "pm660l.dtsi"
++#include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/input/input.h>
+ #include <dt-bindings/input/gpio-keys.h>
+ #include <dt-bindings/input/qcom,spmi-haptics.h>
+@@ -212,6 +213,21 @@
+ 	status = "okay";
+ };
+ 
++&blsp_i2c6 {
++	status = "okay";
++
++	speaker_codec: audio-codec@3a {
++		compatible = "maxim,max98937";
++		reg = <0x3a>;
++		#sound-dai-cells = <0>;
++
++		reset-gpios = <&tlmm 77 GPIO_ACTIVE_LOW>;
++
++		vmon-slot-no = <1>;
++		imon-slot-no = <0>;
++	};
++};
++
+ &lpass_codec {
+ 	status = "okay";
+ };
+@@ -292,6 +308,11 @@
+ };
+ 
+ &q6afedai {
++	dai@16 {
++		reg = <PRIMARY_MI2S_RX>;
++		qcom,sd-lines = <0>;
++	};
++
+ 	dai@81 {
+ 		reg = <LPI_MI2S_RX_0>;
+ 		qcom,sd-lines = <0 1>;
+@@ -410,6 +431,14 @@
+ 			regulator-allow-set-load;
+ 		};
+ 
++		vreg_l6b_1p8: l6 {
++			regulator-min-microvolt = <1800000>;
++			regulator-max-microvolt = <1800000>;
++			regulator-enable-ramp-delay = <250>;
++			/* Smart speaker amplifier supply (MAX98937 VDD) */
++			regulator-always-on;
++		};
++
+ 		vreg_l7b_3p125: l7 {
+ 			regulator-min-microvolt = <2700000>;
+ 			regulator-max-microvolt = <3125000>;
+@@ -625,7 +654,8 @@
+ 	model = "Xiaomi Redmi Note 7";
+ 
+ 	pinctrl-0 = <&cdc_pdm_default>,
+-			<&cdc_dmic_default>;
++			<&cdc_dmic_default>,
++			<&pri_mi2s_active>;
+ 	pinctrl-names = "default";
+ 
+ 	audio-routing = "PDM_RX1", "Digital PDM_RX1",
+@@ -668,6 +698,22 @@
+ 		};
+ 	};
+ 
++	pri-mi2s-dai-link {
++		link-name = "Primary MI2S Playback";
++
++		cpu {
++			sound-dai = <&q6afedai PRIMARY_MI2S_RX>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++
++		codec {
++			sound-dai = <&speaker_codec>;
++		};
++	};
++
+ 	int3-mi2s-dai-link {
+ 		link-name = "Internal MI2S Capture";
+ 
+@@ -688,6 +734,29 @@
+ 
+ &tlmm {
+ 	gpio-reserved-ranges = <8 4>;
++
++	pri_mi2s_active: pri-mi2s-active-state {
++		sck-pins {
++			pins = "gpio12";
++			function = "pri_mi2s";
++			drive-strength = <8>;
++			bias-disable;
++		};
++
++		ws-pins {
++			pins = "gpio13";
++			function = "pri_mi2s_ws";
++			drive-strength = <8>;
++			bias-disable;
++		};
++
++		data-pins {
++			pins = "gpio14", "gpio15";
++			function = "pri_mi2s";
++			drive-strength = <8>;
++			bias-disable;
++		};
++	};
+ 
+ 	mdss_dsi_active: mdss-dsi-active-state {
+ 		function = "gpio";
