@@ -432,8 +432,92 @@ network.
 
 ---
 
-## Modem
+## Audio
 
+### No sound from the speaker
+
+Check that the amplifier driver bound and that the MAX98937 was detected:
+
+```sh
+dmesg | grep -i max98937
+ls /sys/bus/i2c/drivers/max98937/1-003a
+cat /proc/asound/cards
+```
+
+`dmesg` should show `MAX98937 revisionID: 0x43` and no `max98927` lines.  The
+phone's amplifier is a MAX98937, not a MAX98927; the mainline `max98927`
+driver binds but programs the wrong register addresses and the speaker stays
+silent.
+
+Check the routing and the amplifier state:
+
+```sh
+amixer -c 0 cset name='PRI_MI2S_RX Audio Mixer MultiMedia1' on
+amixer -c 0 cset name='Speaker Volume' 6
+amixer -c 0 cset name='Digital Volume' 100
+speaker-test -D hw:0,0 -c 2 -t sine -f 800 -l 1
+```
+
+While a tone is playing, the amp registers should read (via `/dev/i2c-1`,
+`i2cset`/`i2cget` or a small script):
+
+| Register | Meaning | Value |
+| --- | --- | --- |
+| `0x0039` | `AMP_ENABLES` | `0x81` (bit 0 `SPK_EN`) |
+| `0x0500` | `GLOBAL_EN` | `0x01` |
+| `0x0023` | `PCM_MODE_CFG` | `0x40` (I2S, 16-bit) |
+| `0x0026` / `0x0027` | sample rate | `0x08` / `0x88` (48 kHz) |
+
+If `0x0039` is set but `0x0500` is `0x00`, the amp is in global shutdown and
+will not produce sound.  A driver derived only from `max98927.c` misses this
+register because it lives in the extended (`0x05xx`) address space.
+
+### PipeWire shows `stereo-fallback` and logs `no backend DAIs enabled`
+
+The UCM2 profile is missing or does not match the card.  The card driver is
+`sdm660` (from the machine driver match data), and the long name is
+`Xiaomi Redmi Note 7`:
+
+```sh
+alsaucm -c hw:0 dump text | head -20
+```
+
+It must list the `HiFi` verb with `Speaker` and `Mic` devices.  Install the
+files from `userspace/audio/ucm2` into `/usr/share/alsa/ucm2/`, then:
+
+```sh
+systemctl --user restart wireplumber
+wpctl status
+```
+
+The sink `Built-in Audio Speaker playback` and source `Built-in Audio Internal
+microphone` appear when UCM is used.  `alsa_output.platform-sound.*.fallback`
+means UCM was not picked up.
+
+### The microphone is silent
+
+The internal mic is on the PM660L analog codec, ADC1:
+
+```sh
+amixer -c 0 cset name='MultiMedia2 Mixer LPI_MI2S_TX_3' on
+amixer -c 0 cset name='ADC1 Volume' 8
+arecord -D hw:0,1 -f S16_LE -c 1 -r 48000 -d 3 /tmp/mic.wav
+```
+
+Play something through the speaker while recording if you want a quick
+self-test; the 48 kHz capture should pick it up clearly.
+
+### No audio during a phone call
+
+Expected with this kernel.  Playback and microphone capture use the multimedia
+DSP paths (q6asm/q6afe), but call audio needs the separate voice-call DSP
+service (`q6voice`) and a `Voice Call` frontend DAI, neither of which exists in
+Linux 7.2.3.  Adding a `Voice Call` UCM verb does not help because there is no
+PCM behind it.  Call setup and SMS still work.
+
+---
+
+## Modem
 ### `mmcli -L` shows no modem
 
 Check the service chain:

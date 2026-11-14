@@ -6,6 +6,7 @@ Everything in this directory is copied into the root filesystem by
 | Directory | Contents |
 | --- | --- |
 | `base/` | Qualcomm modem/DIAG services, the UIM init script, USB networking debug fallback, zram, and the ModemManager "no net port" patch. |
+| `audio/` | ALSA UCM2 profile for the SDM660 sound card (speaker + microphone routing) and the audio `modules-load.d` list. |
 | `gui/` | The Phosh systemd unit used by the default graphical session. |
 
 ## base
@@ -64,6 +65,25 @@ it automatically after a package upgrade.
 `base/bin/build-qcom.sh` builds `qrtr`, `tqftpserv`, `rmtfs`, `pd-mapper`, and
 `diag-router` from <https://github.com/linux-msm>.  The released rootfs already
 contains them; the script is here so the binaries are not a black box.
+
+## audio
+
+`audio/ucm2` is the ALSA UCM2 profile for the onboard sound card:
+
+| File | Purpose |
+| --- | --- |
+| `conf.d/sdm660/Xiaomi Redmi Note 7.conf` | Card entry, matched on the ASoC driver name (`sdm660`) and long name |
+| `conf.d/sdm660/sdm660.conf` | Same, matched on the driver name alone |
+| `Qualcomm/lavender/HiFi.conf` | `HiFi` verb with `Speaker` and `Mic` devices |
+
+The `Speaker` device routes `MultiMedia1` to Primary MI2S
+(`PRI_MI2S_RX Audio Mixer MultiMedia1`) and sets the MAX98937 gains; the `Mic`
+device routes `MultiMedia2` to LPI MI2S TX3 and sets `ADC1 Volume`.  Without
+this profile PipeWire uses a fallback profile and playback fails with
+`ASoC: no backend DAIs enabled for MultiMedia1`.
+
+`audio/modules-load.d/sdm660-audio.conf` loads the audio modules early so the
+card exists before PipeWire starts.
 
 ## gui
 

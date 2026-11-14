@@ -29,12 +29,12 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **GPU (Adreno 512, a5xx)** | Partial | 7.2.3 includes the upstream a5xx fixes |
 | **Charging & Battery** | Working | Standard charging and battery reporting work |
 | **Offline Charging** | Broken | System does not boot into offline charging mode |
-| **Microphone, Speaker, Earpiece** | Broken |  idk |
+| **Microphone, Speaker, Earpiece** | Working | UCM2 profile included; MAX98937 speaker amp driver |
 | **Modem & SIM Detection** | Working | SIM **must** be placed in Slot 1 |
 | **LTE Registration** | Working | Network registration succeeds |
 | **SMS** | Working | Via ModemManager / `mmcli` |
 | **Cellular Data** | Broken | Kernel lacks SDM660 IPA driver (no data port) |
-| **Phone Calls** | Partial | Call setup works; **audio is broken** |
+| **Phone Calls** | Partial | Call setup works; in-call audio is unsupported (no `q6voice` DSP driver) |
 | **Package Management** | Working | `pacman` and package updates work properly |
 | **Compressed swap (zram)** | Working | `/dev/zram0`, half of RAM, `zstd`, priority 100 |
 | **PC internet over USB** | Working | `scripts/nat.sh` (NAT on the PC side) |

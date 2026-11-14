@@ -35,14 +35,14 @@ broken or untested, and is described in the sections below.
 | GPU (Adreno 512, a5xx) | Partial | 7.2.3 includes the upstream a5xx fixes; UBWC disabled for app compatibility |
 | Charging & Battery | Working | Standard charging and battery reporting work |
 | Offline Charging | Broken | System does not boot into offline charging mode |
-| Audio – Earpiece | Broken | Currently reported broken |
-| Audio – Microphone | Broken | Currently reported broken |
-| Audio – Speaker | Broken | Main speaker is non-functional |
+| Audio – Earpiece | Working | PM660L (PM8916-compatible) analog codec on internal MI2S |
+| Audio – Microphone | Working | PM660L ADC1, routed through the shipped UCM2 profile |
+| Audio – Speaker | Working | MAX98937 smart amp on Primary MI2S (`max98937` driver) |
 | Modem & SIM Detection | Working | SIM **must** be in slot 1 |
 | LTE Registration | Working | Network registration succeeds |
 | SMS | Working | Via ModemManager / `mmcli` |
 | Cellular Data | Broken | Kernel lacks the SDM660 IPA driver (no data port) |
-| Phone Calls | Partial | Call setup works; audio is broken |
+| Phone Calls | Partial | Call setup works; in-call audio is unsupported (no voice-call DSP driver) |
 | Package Management | Working | `pacman` and package updates work |
 | Bluetooth | Broken | `hci0` probes, but the stack does not work |
 | Vibration | Broken | No working vibrator device |
@@ -106,8 +106,15 @@ IPA path.
 
 ### Phone call audio
 
-Call setup works (GNOME Calls / ModemManager). Audio (earpiece, microphone,
-and speaker) is currently reported broken, so calls are incomplete.
+Call setup works (GNOME Calls / ModemManager), but audio inside a call is
+still unsupported.  The kernel is the SDM660 mainline tree at 7.2.3, which has
+no voice-call DSP driver (`q6voice`) and no `Voice Call` frontend DAI.  The
+DSP voice service is never opened, so the modem has no audio path even though
+music playback and microphone capture work.
+
+Supporting calls would require porting the `q6voice`/CVS driver and adding a
+`Voice Call` DAI link to the machine driver; an ALSA UCM `Voice Call` verb on
+its own does not help, because there is no PCM behind it.
 
 ### Cameras, sensors, GPS, fingerprint
 
@@ -115,10 +122,25 @@ These are present in the device tree but do not work yet. `qcom_sns_reg`
 fails to load `qcom/sensors/sns.reg*`, and there is no working camera, GNSS, or
 fingerprint path in this kernel/rootfs combination.
 
-### Main speaker
+### Audio
 
-The main loudspeaker is non-functional, along with the earpiece and microphone
-in the current build.
+Speaker, earpiece and microphone all work:
+
+- The main speaker is driven by a **MAX98937** smart amplifier on Primary
+  MI2S.  It shares the MAX98927 bit layouts but has a different register
+  address map, so the mainline `max98927` driver silently programs the wrong
+  registers.  `kernel/patches/local/0001-...` adds a dedicated `max98937`
+  driver.  The MAX98937 also needs `GLOBAL_EN` (`0x0500`, bit 0) set on
+  unmute in addition to `SPK_EN` (`0x0039`, bit 0); without it the part stays
+  in global shutdown and the speaker is silent.
+- The earpiece and internal microphone are handled by the PM660L
+  (PM8916-compatible) analog codec on internal/LPI MI2S.
+- `userspace/audio/ucm2` installs an ALSA UCM2 profile that gives
+  PipeWire/WirePlumber the `Speaker playback` sink and `Internal microphone`
+  source.  Without it PipeWire falls back to a broken profile and logs
+  `no backend DAIs enabled for MultiMedia1`.
+
+In-call audio is a separate problem; see "Phone call audio" above.
 
 ### Bluetooth
 
@@ -155,6 +177,8 @@ mode. Charge the phone while the system is booted.
 | Root filesystem needs repair | the initramfs runs `e2fsck -p`, then `e2fsck -f -y` |
 | GTK4 text loses random glyphs | `GSK_RENDERER=cairo` (already the default); restart `phosh` after changing it |
 | Firefox shows magenta blocks or blank pages | `FD_MESA_DEBUG=noubwc` (already the default); restart `phosh` after changing it |
+| No sound, PipeWire shows `stereo-fallback` | install the UCM2 profile from `userspace/audio`, then `systemctl --user restart wireplumber` |
+| In-call audio is silent | not supported yet: the kernel has no `q6voice` voice-call DSP driver |
 
 ## Reporting a problem
 

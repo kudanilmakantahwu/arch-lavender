@@ -27,6 +27,22 @@ $ uname -a
 Linux lave-arch 7.2.3-sdm660 #1 SMP PREEMPT ... aarch64 GNU/Linux
 ```
 
+## Audio
+
+| Path | Hardware | Driver |
+| --- | --- | --- |
+| Main speaker | MAX98937 smart amplifier on `blsp_i2c6` (`0x3a`), reset TLMM GPIO 77, supplied by PM660L L6B (1.8 V) | `snd-soc-max98937` (local patch) |
+| Earpiece | PM660L (PM8916-compatible) analog codec | `snd-soc-msm8916-analog` |
+| Internal microphone | PM660L analog codec, ADC1 | `snd-soc-msm8916-analog` |
+| Speaker data | Primary MI2S (`gpio12`–`gpio15`) → MAX98937 | `q6afe` / `q6routing` |
+| Mic data | PM660L → LPI MI2S TX3 | `q6afe` / `q6routing` |
+
+The amplifier is a MAX98937, not the MAX98927 that earlier device trees
+claimed.  Both parts share the bit layouts but not the register map, and the
+MAX98937 additionally has a `GLOBAL_EN` register at `0x0500` that must be set
+for the amplifier to leave global shutdown.  The UCM2 profile that routes
+PipeWire to the speaker and microphone lives in `userspace/audio/ucm2`.
+
 ## Partition layout
 
 The GPT is the stock Xiaomi layout. Linux only uses two of these partitions:

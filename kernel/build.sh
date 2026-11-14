@@ -64,6 +64,20 @@ else
 	echo "== patches: skipped (kernel ${KVER} already contains the a5xx/wifi fixes) =="
 fi
 
+# Local patches are always applied: they carry device support that is not
+# upstream in this kernel tree (currently the MAX98937 speaker amplifier and
+# the lavender audio device-tree nodes).
+echo "== apply local patches =="
+for PATCH in $(find "$WORK/patches/local" -maxdepth 1 -name '*.patch' | sort); do
+	echo "applying: $PATCH"
+	patch -p1 --batch --forward --silent < "$PATCH"
+done
+if find . -name '*.rej' | grep -q .; then
+	echo "ERROR: local patch(es) rejected:" >&2
+	find . -name '*.rej' >&2
+	exit 1
+fi
+
 echo "== config =="
 cp -v "$WORK/config/config-${FLAVOR}.aarch64" .config
 make ARCH=arm64 LLVM=1 olddefconfig

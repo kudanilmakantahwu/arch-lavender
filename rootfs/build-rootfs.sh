@@ -160,6 +160,16 @@ for u in tqftpserv pd-mapper diag-router rmtfs modem-uim-init usb-net-debug zram
     ln -sf "/etc/systemd/system/$u.service" "$MNT/etc/systemd/system/multi-user.target.wants/$u.service" 2>/dev/null || true
 done
 
+echo "==> installing ALSA UCM2 profile and audio module list"
+install -Dm644 "$REPO/userspace/audio/ucm2/conf.d/sdm660/sdm660.conf" \
+    "$MNT/usr/share/alsa/ucm2/conf.d/sdm660/sdm660.conf"
+install -Dm644 "$REPO/userspace/audio/ucm2/conf.d/sdm660/Xiaomi Redmi Note 7.conf" \
+    "$MNT/usr/share/alsa/ucm2/conf.d/sdm660/Xiaomi Redmi Note 7.conf"
+install -Dm644 "$REPO/userspace/audio/ucm2/Qualcomm/lavender/HiFi.conf" \
+    "$MNT/usr/share/alsa/ucm2/Qualcomm/lavender/HiFi.conf"
+install -Dm644 "$REPO/userspace/audio/modules-load.d/sdm660-audio.conf" \
+    "$MNT/etc/modules-load.d/sdm660-audio.conf"
+
 # The patched ModemManager lives in /usr/local/lib/patched so the pacman hook
 # can restore it after a package upgrade.  Install it right away too.
 if [ -f "$MNT/usr/local/lib/patched/ModemManager" ]; then
