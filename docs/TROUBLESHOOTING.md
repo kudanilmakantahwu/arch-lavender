@@ -329,6 +329,32 @@ systemctl daemon-reload
 systemctl restart phosh
 ```
 
+### Firefox and other GPU apps show magenta blocks or blank pages
+
+On Adreno 512, Mesa's UBWC (bandwidth compression) corrupts buffers shared
+between WebRender/EGL clients and the compositor. Firefox pages appear as
+magenta/red rectangles, shifted surfaces, or plain white/black windows. The
+same corruption can hit other GPU-accelerated third-party apps.
+
+Disable UBWC for the session; the image already does this in
+`/etc/environment` and in `phosh.service`:
+
+```sh
+export FD_MESA_DEBUG=noubwc
+```
+
+Verify it reached the session and the app:
+
+```sh
+tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep FD_MESA_DEBUG
+# FD_MESA_DEBUG=noubwc
+tr '\0' '\n' < /proc/$(pgrep -n firefox)/environ | grep FD_MESA_DEBUG
+```
+
+With the variable set, a test page with solid red, blue, and green blocks must
+render cleanly. To confirm the cause without a reboot, launch Firefox once with
+`FD_MESA_DEBUG=noubwc firefox`.
+
 ### Phosh does not start / black screen
 
 ```sh
@@ -556,6 +582,9 @@ Phosh is the default UI, not an opt-in experiment. Common symptoms:
   `journalctl -u phosh -b`, and `dmesg | grep -i msm`.
 - Text loses random glyphs: make sure `GSK_RENDERER=cairo` reached the session
   (see [glyph glitches](#text-loses-random-letters-glyph-glitches)).
+- Firefox shows magenta blocks or blank pages: make sure
+  `FD_MESA_DEBUG=noubwc` reached the session (see
+  [GPU app corruption](#firefox-and-other-gpu-apps-show-magenta-blocks-or-blank-pages)).
 - Touch input is offset: the panel/touch node may not match; check
   `/proc/device-tree/model` is `Xiaomi Redmi Note 7 (Shenchao)`.
 - The compositor crashes after a GPU hang: reboot and check

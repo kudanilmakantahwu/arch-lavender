@@ -96,6 +96,11 @@ gsk=$(tr '\0' '\n' < "/proc/$(pgrep -n phosh 2>/dev/null)/environ" 2>/dev/null |
 [ "$gsk" = "cairo" ] && ok "GSK_RENDERER=cairo" \
     || warn "GSK_RENDERER is '${gsk:-unset}' (glyph glitches are expected)"
 
+# UBWC compression corrupts Firefox/WebRender buffers on Adreno 512.
+ubwc=$(tr '\0' '\n' < "/proc/$(pgrep -n phosh 2>/dev/null)/environ" 2>/dev/null | sed -n 's/^FD_MESA_DEBUG=//p')
+[ "$ubwc" = "noubwc" ] && ok "FD_MESA_DEBUG=noubwc" \
+    || warn "FD_MESA_DEBUG is '${ubwc:-unset}' (GPU apps may show magenta blocks)"
+
 [ -d /var/log ] && ok "/var/log exists" || fail "/var/log missing (usb-net-debug needs it)"
 
 echo "== console fallback (tty2) =="

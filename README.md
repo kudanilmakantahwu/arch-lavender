@@ -48,7 +48,7 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **GPS** | Broken | — |
 | **Suspend / Deep Sleep** | Untested | — |
 | **Fingerprint Sensor** | Broken | — |
-| **Phosh / GUI Session** | Working | Default UI; `GSK_RENDERER=cairo` works around the Adreno 512 GTK4 glyph bug |
+| **Phosh / GUI Session** | Working | Default UI; `GSK_RENDERER=cairo` and `FD_MESA_DEBUG=noubwc` work around Adreno 512 GTK4 glyph and UBWC corruption bugs |
 
 For detailed version history and logs, see [`docs/STATUS.md`](docs/STATUS.md).
 
@@ -118,12 +118,14 @@ The default install boots to `graphical.target` and starts Phosh on `tty1`
 (phoc + squeekboard, user `alarm`). SSH over USB and WiFi remains enabled.
 
 GTK4's NGL renderer loses glyphs at random on the Adreno 512, so the image
-exports `GSK_RENDERER=cairo`. This is the same workaround postmarketOS uses on
-Adreno 5xx devices. If a program still renders badly, check that the variable
-reached its environment:
+exports `GSK_RENDERER=cairo`. Mesa's UBWC compression also corrupts buffers
+shared with Firefox/WebRender, so the image exports `FD_MESA_DEBUG=noubwc` as
+well; without it pages show magenta blocks or stay blank. Both are the same
+workarounds postmarketOS uses on Adreno 5xx devices. If a program still renders
+badly, check that the variables reached its environment:
 
 ```sh
-tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep GSK_RENDERER
+tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep -E 'GSK_RENDERER|FD_MESA_DEBUG'
 ```
 
 `getty@tty2` stays enabled with a readable 16×32 console font
