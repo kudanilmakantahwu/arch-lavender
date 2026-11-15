@@ -48,9 +48,11 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **GPS** | Broken | — |
 | **Suspend / Deep Sleep** | Untested | — |
 | **Fingerprint Sensor** | Broken | — |
-| **Phosh / GUI Session** | Working | Default UI; `GSK_RENDERER=cairo` and `FD_MESA_DEBUG=noubwc` work around Adreno 512 GTK4 glyph and UBWC corruption bugs |
+| **Phosh / GUI Session** | Working | Default UI; GL renderer (`GSK_RENDERER=ngl`, ~2x faster than cairo) plus `FD_MESA_DEBUG=noubwc` for the Adreno 512 UBWC bug, see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
 
-For detailed version history and logs, see [`docs/STATUS.md`](docs/STATUS.md).
+For detailed version history and logs, see [`docs/STATUS.md`](docs/STATUS.md);
+for the renderer/memory/governor A/B measurements and the final tuned
+defaults, see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 
 ---
 
@@ -117,12 +119,13 @@ Complete walkthroughs for Wi-Fi and modem setup are located in [`docs/INSTALL.md
 The default install boots to `graphical.target` and starts Phosh on `tty1`
 (phoc + squeekboard, user `alarm`). SSH over USB and WiFi remains enabled.
 
-GTK4's NGL renderer loses glyphs at random on the Adreno 512, so the image
-exports `GSK_RENDERER=cairo`. Mesa's UBWC compression also corrupts buffers
-shared with Firefox/WebRender, so the image exports `FD_MESA_DEBUG=noubwc` as
-well; without it pages show magenta blocks or stay blank. Both are the same
-workarounds postmarketOS uses on Adreno 5xx devices. If a program still renders
-badly, check that the variables reached its environment:
+The image runs the GL renderer (`GSK_RENDERER=ngl`): text scrolling reaches
+~50 fps against ~23 fps with cairo on the same 4000-line GTK4 text view, and a
+scroll stress test with ngl showed no missing glyphs. Mesa's UBWC compression
+still corrupts buffers shared with Firefox/WebRender, so the image exports
+`FD_MESA_DEBUG=noubwc` as well; without it pages show magenta blocks or stay
+blank. If a program still renders badly, check that the variables reached its
+environment:
 
 ```sh
 tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep -E 'GSK_RENDERER|FD_MESA_DEBUG'

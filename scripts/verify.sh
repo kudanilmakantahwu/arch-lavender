@@ -91,10 +91,10 @@ for p in phoc phosh squeekboard; do
     fi
 done
 
-# Adreno 512 needs the cairo renderer or GTK4 loses glyphs at random.
+# GL renderer is ~2.2x faster than cairo; cairo is the glyph-bug fallback.
 gsk=$(tr '\0' '\n' < "/proc/$(pgrep -n phosh 2>/dev/null)/environ" 2>/dev/null | sed -n 's/^GSK_RENDERER=//p')
-[ "$gsk" = "cairo" ] && ok "GSK_RENDERER=cairo" \
-    || warn "GSK_RENDERER is '${gsk:-unset}' (glyph glitches are expected)"
+[ "$gsk" = "ngl" ] && ok "GSK_RENDERER=ngl" \
+    || warn "GSK_RENDERER is '${gsk:-unset}' (expected ngl; cairo is slower)"
 
 # UBWC compression corrupts Firefox/WebRender buffers on Adreno 512.
 ubwc=$(tr '\0' '\n' < "/proc/$(pgrep -n phosh 2>/dev/null)/environ" 2>/dev/null | sed -n 's/^FD_MESA_DEBUG=//p')

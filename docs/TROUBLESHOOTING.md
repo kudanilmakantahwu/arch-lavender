@@ -312,22 +312,44 @@ systemctl enable --now getty@tty2
 
 ### Text loses random letters (glyph glitches)
 
-GTK4's NGL renderer has a broken glyph cache on freedreno/Adreno 512. Headers
-and buttons show missing letters while small text looks fine. The image exports
-`GSK_RENDERER=cairo` in `/etc/environment` and in `phosh.service`; verify it
-reached the session:
+The default renderer is `GSK_RENDERER=ngl` (GL), which scrolls text about twice
+as fast as cairo on the Adreno 512. If headers or buttons start losing letters,
+switch back to the cairo renderer, which is slower but has never corrupted
+glyphs:
 
 ```sh
+sed -i '/^GSK_RENDERER=/d' /etc/environment
+echo 'GSK_RENDERER=cairo' >> /etc/environment
+sed -i 's/GSK_RENDERER=ngl/GSK_RENDERER=cairo/' /etc/systemd/system/phosh.service.d/*.conf 2>/dev/null
+systemctl daemon-reload
+systemctl restart phosh
 tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep GSK_RENDERER
 # GSK_RENDERER=cairo
 ```
 
-If it is missing, reinstall the unit or add the variable, then restart:
+### Compositor dies while touching the screen (`phoc` SIGSEGV)
+
+`phoc` can crash in `handle_touch_up` → `wlr_surface_get_root_surface` when the
+surface under the finger disappears (app closed, keyboard dismissed, job
+finished) between touch-down and touch-up:
+
+```
+#0 wlr_subsurface_try_from_wlr_surface (libwlroots-0.20.so)
+#1 wlr_surface_get_root_surface (libwlroots-0.20.so)
+#3 handle_touch_up (libwlroots-0.20.so)
+```
+
+The session dies with it; `systemctl` restarts `phosh.service` and everything
+reopens. It is a wlroots 0.20/phoc bug, not a kernel or renderer problem, and
+it happens with both cairo and ngl. Confirm with:
 
 ```sh
-systemctl daemon-reload
-systemctl restart phosh
+coredumpctl list --since '-1 hour'
+coredumpctl info $(coredumpctl list --since '-1 hour' -F PID | tail -1)
 ```
+
+Avoid closing apps with an active touch, and keep the touchscreen still while
+an app exits.
 
 ### Firefox and other GPU apps show magenta blocks or blank pages
 
@@ -453,8 +475,8 @@ Check the routing and the amplifier state:
 
 ```sh
 amixer -c 0 cset name='PRI_MI2S_RX Audio Mixer MultiMedia1' on
-amixer -c 0 cset name='Speaker Volume' 6
-amixer -c 0 cset name='Digital Volume' 100
+amixer -c 0 cset name='Speaker Volume' 6   # 6 is the maximum; only 0/2/4/6 exist
+amixer -c 0 cset name='Digital Volume' 127  # 127 is +5.9 dB over the old 100
 speaker-test -D hw:0,0 -c 2 -t sine -f 800 -l 1
 ```
 

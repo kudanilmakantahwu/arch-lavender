@@ -54,7 +54,7 @@ files that must not come from the captured system:
 | `etc/fstab` | mounts `LABEL=pmOS_root` |
 | `etc/hostname` | `lave-arch` |
 | `etc/shadow`, `etc/gshadow` | documented passwords, locked system users |
-| `etc/environment` | `GSK_RENDERER=cairo` and `FD_MESA_DEBUG=noubwc` for the Adreno 512 workarounds |
+| `etc/environment` | `GSK_RENDERER=ngl` and `FD_MESA_DEBUG=noubwc` for the Adreno 512 workarounds |
 | `etc/ssh/sshd_config.d/99-root-login.conf` | allow the first root login |
 | `etc/NetworkManager/conf.d/usb0.conf` | keep NetworkManager off `usb0` |
 | `etc/systemd/network/10-usb0.network` | static `172.16.42.1/24` + DHCP server |
@@ -65,8 +65,8 @@ files that must not come from the captured system:
 
 The image boots to `graphical.target` and starts Phosh on `tty1` as user
 `alarm`. `phosh.service` is installed from `../userspace/gui/` and carries the
-`GSK_RENDERER=cairo` and `FD_MESA_DEBUG=noubwc` workarounds for the Adreno 512
-glyph and UBWC corruption bugs.
+`GSK_RENDERER=ngl` and `FD_MESA_DEBUG=noubwc` settings for the Adreno 512
+(renderer speed, UBWC corruption).
 
 The build:
 

@@ -91,8 +91,9 @@ card exists before PipeWire starts.
 
 - `phoc` compositor with `WLR_BACKENDS=drm,libinput`,
 - `LIBSEAT_BACKEND=seatd`,
-- `GSK_RENDERER=cairo`, because GTK4's NGL renderer loses glyphs at random on
-  the Adreno 512 (the same workaround postmarketOS uses on Adreno 5xx),
+- `GSK_RENDERER=ngl`, the GL renderer: ~2.2x the text-scroll frame rate of
+  cairo on the Adreno 512 (51 fps vs 23 fps), with clean glyphs in the scroll
+  stress test; fall back to `cairo` if glyphs go missing,
 - `FD_MESA_DEBUG=noubwc`, because UBWC compression corrupts Firefox/WebRender
   buffers (magenta blocks, blank pages).
 

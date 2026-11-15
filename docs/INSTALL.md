@@ -159,7 +159,7 @@ The script:
 
 - creates an 8 GiB image with `mkfs.ext4 -L pmOS_root`,
 - extracts the tarball with ownership preserved,
-- applies `rootfs/overlay/` (fstab, passwords, `GSK_RENDERER=cairo`, sshd root
+- applies `rootfs/overlay/` (fstab, passwords, `GSK_RENDERER=ngl`, sshd root
   login, USB networking, `vconsole.conf`),
 - **re-owns the whole tree as `root:root` and restores the setuid bits** on
   `mount`, `su`, `sudo`, `passwd`, … . The released tarball was repacked by an
@@ -530,9 +530,10 @@ the IPA data path.
 - ModemManager is patched. The binary is stored in
   `/usr/local/lib/patched/ModemManager`, and
   `/etc/pacman.d/hooks/99-local-patches.hook` copies it back after an upgrade.
-- Phosh is the default session. `GSK_RENDERER=cairo` is exported globally to
-  work around the Adreno 512 GTK4 glyph bug; see
-  [Phosh desktop](#16-phosh-desktop).
+- Phosh is the default session. `GSK_RENDERER=ngl` (GL renderer) is exported
+  globally because it scrolls text about twice as fast as cairo on the Adreno
+  512; see [Phosh desktop](#16-phosh-desktop) and
+  [PERFORMANCE.md](PERFORMANCE.md).
 
 ### Recommended package set
 
@@ -653,10 +654,12 @@ Phosh is the default UI and starts automatically on `tty1` as user `alarm`:
 - `seatd` grants the session access to DRM/input devices,
 - `getty@tty2` stays enabled as a text-console fallback.
 
-The image ships `GSK_RENDERER=cairo` in `/etc/environment` and in the Phosh
-unit. GTK4's NGL renderer loses glyphs at random on the Adreno 512 (headers and
-buttons show missing letters); the cairo renderer is slower but correct, and
-it is the same workaround postmarketOS uses on Adreno 5xx.
+The image ships `GSK_RENDERER=ngl` in `/etc/environment` and in the Phosh unit.
+On the Adreno 512 the GL renderer scrolls a 4000-line GTK4 text view at ~50 fps
+against ~23 fps for cairo, and the scroll stress test rendered all glyphs
+correctly. If headers or buttons start losing letters, switch back with
+`GSK_RENDERER=cairo` and restart the session; the measurements are in
+[PERFORMANCE.md](PERFORMANCE.md).
 
 Check the session:
 
