@@ -114,7 +114,7 @@ Download the assets from the GitHub release (replace the tag if needed):
 ```sh
 mkdir -p ~/lavender-assets && cd ~/lavender-assets
 
-gh release download v1.0 \
+gh release download v1.1 \
   --repo kudanilmakantahwu/arch-lavender \
   --pattern 'arch-lavender-boot.img' \
   --pattern 'arch-initramfs-fsck.gz' \
