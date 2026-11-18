@@ -269,6 +269,9 @@ All runs below use the installed system-wide library, no `/opt` or
 - `gskstress` (400 GSK glyph-atlas frames) and `gskimg` (300 GtkImage churn
   frames) render their final frames complete:
   `shots/gskstress-sys.png`, `shots/gskimg-sys.png`.
+- After the rebuild, `gskstress` logs `DONE frames=400` and shows the complete
+  glyph set (`shots/gskstress-gl2.png`); `gskimg` logs `DONE frames=300` and
+  ends with one clean 360 px Arch logo (`shots/gskimg-done.png`).
 - Angelfish (QtWebEngine) loads `https://example.com` with the rebuilt lib and
   maps `/usr/lib/libgallium-26.2.6-arch1.1.so`: `shots/angelfish-gl2.png`.
   It fails to start on the GLES-only build, which is why desktop GL is enabled.
