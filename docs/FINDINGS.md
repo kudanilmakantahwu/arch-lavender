@@ -312,35 +312,7 @@ All runs below use the installed system-wide library, no `/opt` or
 - Verify squeekboard and the lock screen after a clean reboot (session restart
   already keeps them working).
 
-### A11. Separate issue: no Wi-Fi password prompt
-
-Symptom: selecting a secured network in Settings or the phosh quick settings
-closed without a password dialog; the connection stayed in `need-auth`/failed.
-
-Root cause: `gnome-keyring` was not installed, so the session had no
-`org.freedesktop.secrets` provider. phosh's `ShellNetworkAgent` always queries
-the keyring first in `get_secrets_keyring_cb()`; when the secret service is
-missing the query fails, the callback returns `NM_SECRET_AGENT_ERROR_FAILED`,
-and `secret_request_new_cb()` never creates `PhoshNetworkAuthPrompt`. NM then
-reports no secrets even though the agent is registered.
-
-Evidence:
-
-- `secret-tool search foo bar` as `alarm` returned
-  `The name is not activatable`.
-- `busctl --user list` had no `org.freedesktop.secrets` before the install;
-  after `pacman -S gnome-keyring` it is activatable.
-- After the install, the prompt appears for a saved-but-secretless network in
-  Settings (`shots/wifi-prompt-now.png`) and from the quick settings Wi-Fi list
-  (`shots/qs-wifi5.png`).
-- A root `nmcli` test is not a valid reproducer: NM filters secret agents by
-  the activating UID, so the uid-1000 phosh agent is skipped for a root-owned
-  profile.
-
-Fix: install `gnome-keyring` (provides `org.freedesktop.secrets`; the package
-enables its user socket). No phosh or NetworkManager configuration was changed.
-
-### A12. Repo build and rootfs install check
+### A11. Repo build and rootfs install check
 
 A pristine `mesa-26.2.6.tar.xz` plus
 `userspace/mesa/patches/0001-freedreno-a5xx-2d-blit-and-hbb.patch` was built on
