@@ -354,6 +354,14 @@ and `ldd -r` reports no undefined symbols against the rootfs
 installed library and phoc were untouched) was 150/150 clean, renderer FD512:
 `/root/lab/logs/glatlas2-repo-{1,2,3}.log`.
 
+The fresh artifact was then installed system-wide, phosh was restarted, and
+`glatlas2` was run again 3x50: 150/150 clean, renderer FD512
+(`/root/lab/logs/glatlas2-repofinal-{1,2,3}.log`). The pacman restore path was
+tested by copying the pristine distro library over
+`/usr/lib/libgallium-26.2.6-arch1.1.so`; running
+`/usr/local/sbin/reinstall-patched-libs` restored the patched sha256 and left
+phosh active.
+
 The `rootfs/build-rootfs.sh` install block was exercised against a real
 AArch64 `libgallium` and a copy of the image's `libEGL_mesa.so.0`: it installs
 the library into both `/usr/lib` and `/usr/local/lib/patched`, and rejects a
