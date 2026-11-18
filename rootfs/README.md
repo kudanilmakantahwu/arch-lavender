@@ -61,6 +61,31 @@ files that must not come from the captured system:
 | `etc/pacman.conf` | pin the kernel packages, Arch ARM architecture |
 | `etc/pacman.d/mirrorlist` | Arch Linux ARM mirror |
 
+## Patched Mesa (a512 2D-blit fix)
+
+The Adreno 512 in this phone loses Mesa's staging `glTexSubImage2D` uploads
+because `CP_BLIT(BLIT_OP_COPY)` is a no-op, which causes missing glyphs and
+black texture tiles. The fix is a patched userspace `libgallium`, not a
+kernel change.
+
+A prebuilt, ABI-matched library is included at
+`userspace/mesa/libgallium-26.2.6-arch1.1.so`; `build-rootfs.sh` detects it
+automatically. To use a different build, pass it explicitly:
+
+```sh
+sudo MESA_GALLIUM=/path/to/libgallium-26.2.6-arch1.1.so \
+    ./build-rootfs.sh rootfs-arch.tar.zst rootfs.img
+```
+
+Before copying, the script checks that the file is AArch64, that its soname
+matches its filename, and that this is the `libgallium` the image's
+`libEGL_mesa` needs. It then installs the library into `/usr/lib` and
+`/usr/local/lib/patched` so the pacman hook can restore it after a Mesa
+upgrade. Without a patched library the build prints a warning and the image
+keeps the distro Mesa, which still has the bug. See
+[`../userspace/mesa/README.md`](../userspace/mesa/README.md) for the build
+steps and ABI requirements.
+
 ## Phosh by default
 
 The image boots to `graphical.target` and starts Phosh on `tty1` as user

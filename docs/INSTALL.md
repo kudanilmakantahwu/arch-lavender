@@ -169,6 +169,11 @@ The script:
   See [No USB network](TROUBLESHOOTING.md#no-usb-network),
 - installs the base userspace units and scripts, including a `zram-swap` unit
   (compressed swap sized at half of RAM, `zstd`),
+- installs the included prebuilt `libgallium` from `userspace/mesa/` (or the
+  file in `MESA_GALLIUM=/path/to/libgallium-*.so`), so the image carries the
+  Adreno 512 2D-blit fix; if no library is available it warns and keeps the
+  distro Mesa, which still loses glyph/texture uploads (see
+  [`userspace/mesa/README.md`](../userspace/mesa/README.md)),
 - removes the `maf` build account and stale `fbkeyboard` / `touch-zoom` /
   patched-wlroots leftovers, so only `root` and `alarm` can log in,
 - installs and enables Phosh, `seatd`, `systemd-networkd`, `NetworkManager`,
@@ -530,6 +535,11 @@ the IPA data path.
 - ModemManager is patched. The binary is stored in
   `/usr/local/lib/patched/ModemManager`, and
   `/etc/pacman.d/hooks/99-local-patches.hook` copies it back after an upgrade.
+- Mesa is patched for the Adreno 512 2D-blit bug. The library is stored in
+  `/usr/local/lib/patched/libgallium-26.2.6-arch1.1.so` and copied into
+  `/usr/lib` by the same hook after a `mesa` upgrade. The source patch and
+  build script are in [`userspace/mesa/`](../userspace/mesa/README.md); a
+  Mesa soname bump needs a rebase and rebuild.
 - Phosh is the default session. `GSK_RENDERER=ngl` (GL renderer) is exported
   globally because it scrolls text about twice as fast as cairo on the Adreno
   512; see [Phosh desktop](#16-phosh-desktop) and

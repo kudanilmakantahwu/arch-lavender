@@ -4,6 +4,11 @@
 #
 # Usage (as root):
 #   ./build-rootfs.sh rootfs-arch.tar.zst rootfs.img
+#   MESA_GALLIUM=/path/to/libgallium-26.2.6-arch1.1.so \
+#       ./build-rootfs.sh rootfs-arch.tar.zst rootfs.img
+#
+# MESA_GALLIUM is optional; see userspace/mesa/README.md.  Without it the
+# script also looks for userspace/mesa/libgallium-*.so.
 #
 # Requirements on the host: tar, zstd, e2fsprogs (mkfs.ext4, e2fsck,
 # resize2fs).  android-sdk-libsparse-tools (img2simg) is optional; without
@@ -154,6 +159,50 @@ install -Dm755 "$REPO/userspace/base/bin/reinstall-patched-libs" "$MNT/usr/local
 install -Dm755 "$REPO/userspace/base/bin/usb-net-debug.sh"    "$MNT/usr/local/bin/usb-net-debug.sh"
 install -Dm755 "$REPO/userspace/base/bin/zram-swap.sh"        "$MNT/usr/local/bin/zram-swap.sh"
 install -Dm644 "$REPO/userspace/base/pacman/99-local-patches.hook" "$MNT/etc/pacman.d/hooks/99-local-patches.hook"
+
+# The a512/FD512 glyph fix is a patched userspace libgallium, not a kernel
+# change. Install it when the caller passes MESA_GALLIUM or when a prebuilt
+# userspace/mesa/libgallium-*.so is present; otherwise the image keeps the
+# distro Mesa and still loses 2D-blit uploads.
+MESA_LIB="${MESA_GALLIUM:-}"
+if [ -z "$MESA_LIB" ]; then
+    for f in "$REPO"/userspace/mesa/libgallium-*.so; do
+        [ -f "$f" ] && { MESA_LIB="$f"; break; }
+    done
+fi
+if [ -n "$MESA_LIB" ]; then
+    [ -f "$MESA_LIB" ] || { echo "MESA_GALLIUM not found: $MESA_LIB" >&2; exit 1; }
+    MESA_NAME=$(basename "$MESA_LIB")
+    if command -v readelf >/dev/null 2>&1; then
+        readelf -h "$MESA_LIB" 2>/dev/null | grep -q 'AArch64' || {
+            echo "error: $MESA_LIB is not an AArch64 library" >&2
+            exit 1
+        }
+        readelf -d "$MESA_LIB" 2>/dev/null | grep -q "SONAME.*\\[$MESA_NAME\\]" || {
+            echo "error: $MESA_LIB does not have soname $MESA_NAME" >&2
+            exit 1
+        }
+    fi
+    if [ -f "$MNT/usr/lib/libEGL_mesa.so.0" ]; then
+        if command -v readelf >/dev/null 2>&1; then
+            readelf -d "$MNT/usr/lib/libEGL_mesa.so.0" 2>/dev/null |
+                grep -q "NEEDED.*\\[$MESA_NAME\\]" || {
+                echo "error: $MESA_NAME is not the libgallium that the rootfs libEGL_mesa needs" >&2
+                exit 1
+            }
+        elif ! grep -aq "$MESA_NAME" "$MNT/usr/lib/libEGL_mesa.so.0"; then
+            echo "error: $MESA_NAME does not match the rootfs libEGL_mesa" >&2
+            exit 1
+        fi
+    fi
+    echo "==> installing patched $MESA_NAME"
+    install -Dm755 "$MESA_LIB" "$MNT/usr/local/lib/patched/$MESA_NAME"
+    install -Dm755 "$MESA_LIB" "$MNT/usr/lib/$MESA_NAME"
+else
+    echo "WARNING: no patched libgallium provided; the image keeps the" >&2
+    echo "         distro Mesa and the a512 glyph loss remains." >&2
+    echo "         See userspace/mesa/README.md." >&2
+fi
 
 for u in tqftpserv pd-mapper diag-router rmtfs modem-uim-init usb-net-debug zram-swap; do
     install -Dm644 "$REPO/userspace/base/systemd/$u.service" "$MNT/etc/systemd/system/$u.service"

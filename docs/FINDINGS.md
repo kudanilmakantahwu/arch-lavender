@@ -242,8 +242,9 @@ The intermediate GLES-only build is kept as
 `/root/lab/backup/libgallium-26.2.6-arch1.1.so.glesonly`.
 The `/opt` drop-in `zz-mesa-hbb.conf` was removed; only the pre-existing
 `mesa-noubwc.conf` (`FD_MESA_DEBUG=noubwc`) remains. phoc maps the system
-libgallium. This is still a lab-only build (freedreno only, `llvm=disabled`,
-glvnd disabled, no swrast/zink); do not ship it as a general Mesa replacement.
+libgallium. This is a device-specific build (freedreno only, `llvm=disabled`,
+glvnd disabled, no swrast/zink); ship it only as the lavender rootfs override,
+not as a general Mesa replacement.
 
 ### A9. System-wide validation
 
@@ -294,9 +295,13 @@ All runs below use the installed system-wide library, no `/opt` or
 
 ### A10. Remaining work
 
-- Keep the system-wide lib only as a lab override; an Arch `mesa` upgrade will
-  overwrite it. For distribution, carry the three patches in a Mesa PKGBUILD
-  until 26.3.
+- The fix is now carried in the repo as
+  `userspace/mesa/patches/0001-freedreno-a5xx-2d-blit-and-hbb.patch` plus
+  `userspace/mesa/build-libgallium.sh`, with an ABI-matched prebuilt library;
+  `rootfs/build-rootfs.sh` installs it (or a `MESA_GALLIUM` override). Keep
+  the system-wide lib on the lab phone as an override; an Arch `mesa` upgrade
+  will overwrite it until the pacman hook restores it. The same backport
+  should go into a Mesa PKGBUILD (or be dropped after 26.3).
 - Use a browser on a real site for a longer uptime run (hours); the 3x50
   reproducer and the short app checks are done.
 - Epiphany is broken independently of Mesa: `WebKitWebProcess` aborts in the
@@ -334,6 +339,32 @@ Evidence:
 
 Fix: install `gnome-keyring` (provides `org.freedesktop.secrets`; the package
 enables its user socket). No phosh or NetworkManager configuration was changed.
+
+### A12. Repo build and rootfs install check
+
+A pristine `mesa-26.2.6.tar.xz` plus
+`userspace/mesa/patches/0001-freedreno-a5xx-2d-blit-and-hbb.patch` was built on
+the phone with `userspace/mesa/build-libgallium.sh`. The result is AArch64,
+soname `libgallium-26.2.6-arch1.1.so`, exports the 18 `loader_dri3_*` symbols,
+and `ldd -r` reports no undefined symbols against the rootfs
+`libEGL_mesa.so.0` or `dri/msm_dri.so`. Fresh-build sha256:
+`3771d039bb92b339946bf80be42ffafae7638bc83433764c59d92a134dba52e2`.
+
+`glatlas2` 3x50 against that fresh artifact (via `LD_LIBRARY_PATH`, so the
+installed library and phoc were untouched) was 150/150 clean, renderer FD512:
+`/root/lab/logs/glatlas2-repo-{1,2,3}.log`.
+
+The `rootfs/build-rootfs.sh` install block was exercised against a real
+AArch64 `libgallium` and a copy of the image's `libEGL_mesa.so.0`: it installs
+the library into both `/usr/lib` and `/usr/local/lib/patched`, and rejects a
+wrong soname or a non-AArch64 file before touching the image.
+
+The repository ships the system-validated build from A9
+(`userspace/mesa/libgallium-26.2.6-arch1.1.so`, sha256
+`2e66f90e…a47808c`), with `SHA256SUMS`. The clean-tree rebuild above has a
+different BuildID because the build directory differs; it is the same ABI and
+passed the same 3x50 test. The prebuilt exists so a rootfs build includes the
+fix without an aarch64 Mesa build; the patch and script remain authoritative.
 
 ## B. Stutter (after A)
 

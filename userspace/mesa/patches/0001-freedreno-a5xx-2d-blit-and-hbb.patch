@@ -1,0 +1,658 @@
+From 51cff7682b3b6bfbe0ebfb06ea1ab3c917a295d1 Mon Sep 17 00:00:00 2001
+From: kudanilmakantahwu <kudanilmakantahwu@users.noreply.github.com>
+Date: Wed, 18 Nov 2026 14:18:06 +0700
+Subject: [PATCH] freedreno/a5xx: fix 2D blit uploads and program highest bank
+ bit
+
+Backport against Mesa 26.2.6. The first three upstream commits fix the
+a512/FD512 2D blit path (MR !45483): CP_BLIT(BLIT_OP_COPY) silently
+performs no memory write, which breaks glTexSubImage2D uploads into a
+texture that is still referenced by an unflushed batch.
+
+  ba27232 freedreno/registers: make the 2D blit ifmt enums common
+  a5c42c0 freedreno/a5xx: convert 2D blits through the right intermediate format
+  c0235ef freedreno/a5xx: program the 2D source and use BLIT_OP_SCALE
+
+The hbb changes are a separate fix, included because the tested
+libgallium was built with them:
+
+  d4b6701 freedreno: take the highest bank bit from the kernel
+  4fa3294 freedreno/a5xx: program the highest bank bit of the part
+---
+ src/freedreno/drm/freedreno_drmif.h           |   1 +
+ src/freedreno/drm/msm/msm_pipe.c              |   2 +
+ src/freedreno/registers/adreno/a5xx.xml       |  50 +++++-
+ src/freedreno/registers/adreno/a6xx.xml       |   9 +-
+ src/freedreno/registers/adreno/a6xx_enums.xml |  13 --
+ .../registers/adreno/adreno_common.xml        |  22 +++
+ src/freedreno/vulkan/tu_clear_blit.cc         |   8 +-
+ .../drivers/freedreno/a5xx/fd5_blitter.c      | 164 ++++++++++++++++--
+ src/gallium/drivers/freedreno/a5xx/fd5_emit.c |   5 +-
+ .../drivers/freedreno/a6xx/fd6_blitter.cc     |   6 +-
+ .../drivers/freedreno/freedreno_screen.c      |   4 +
+ .../drivers/freedreno/freedreno_screen.h      |   1 +
+ 12 files changed, 229 insertions(+), 56 deletions(-)
+
+diff --git a/src/freedreno/drm/freedreno_drmif.h b/src/freedreno/drm/freedreno_drmif.h
+index ecb84aa..4f96c15 100644
+--- a/src/freedreno/drm/freedreno_drmif.h
++++ b/src/freedreno/drm/freedreno_drmif.h
+@@ -48,6 +48,7 @@ enum fd_param_id {
+    FD_SYSPROF,       /* Settable (for CAP_SYS_ADMIN) param for system profiling */
+    FD_VA_SIZE,       /* GPU virtual address size */
+    FD_UCHE_TRAP_BASE,
++   FD_HIGHEST_BANK_BIT,
+ };
+ 
+ /**
+diff --git a/src/freedreno/drm/msm/msm_pipe.c b/src/freedreno/drm/msm/msm_pipe.c
+index c80f1b3..d81944e 100644
+--- a/src/freedreno/drm/msm/msm_pipe.c
++++ b/src/freedreno/drm/msm/msm_pipe.c
+@@ -86,6 +86,8 @@ msm_pipe_get_param(struct fd_pipe *pipe, enum fd_param_id param,
+       return query_param(pipe, MSM_PARAM_VA_SIZE, value);
+    case FD_UCHE_TRAP_BASE:
+       return query_param(pipe, MSM_PARAM_UCHE_TRAP_BASE, value);
++   case FD_HIGHEST_BANK_BIT:
++      return query_param(pipe, MSM_PARAM_HIGHEST_BANK_BIT, value);
+    default:
+       ERROR_MSG("invalid param id: %d", param);
+       return -1;
+diff --git a/src/freedreno/registers/adreno/a5xx.xml b/src/freedreno/registers/adreno/a5xx.xml
+index 4af76b3..cb3a49e 100644
+--- a/src/freedreno/registers/adreno/a5xx.xml
++++ b/src/freedreno/registers/adreno/a5xx.xml
+@@ -1467,7 +1467,9 @@ xsi:schemaLocation="https://gitlab.freedesktop.org/freedreno/ rules-fd.xsd">
+ 
+ 	<reg32 offset="0x0cc4" name="RB_DBG_ECO_CNTL"/> <!-- always 00100000? -->
+ 	<reg32 offset="0x0cc5" name="RB_ADDR_MODE_CNTL" type="a5xx_address_mode"/>
+-	<reg32 offset="0x0cc6" name="RB_MODE_CNTL"/> <!-- always 00000044? -->
++	<reg32 offset="0x0cc6" name="RB_MODE_CNTL">
++		<bitfield name="HIGHESTBANKBIT" low="1" high="2" type="uint"/>
++	</reg32>
+ 	<reg32 offset="0x0cc7" name="RB_CCU_CNTL"/> <!-- always b0056080 or 10000000? -->
+ 	<reg32 offset="0x0cd0" name="RB_PERFCTR_RB_SEL_0" type="a5xx_rb_perfcounter_select"/>
+ 	<reg32 offset="0x0cd1" name="RB_PERFCTR_RB_SEL_1" type="a5xx_rb_perfcounter_select"/>
+@@ -1597,7 +1599,9 @@ xsi:schemaLocation="https://gitlab.freedesktop.org/freedreno/ rules-fd.xsd">
+ 	<reg32 offset="0x0edf" name="SP_POWERCTR_SP_SEL_3"/>
+ 
+ 	<reg32 offset="0x0f01" name="TPL1_ADDR_MODE_CNTL" type="a5xx_address_mode"/>
+-	<reg32 offset="0x0f02" name="TPL1_MODE_CNTL"/> <!-- always 00000544? -->
++	<reg32 offset="0x0f02" name="TPL1_MODE_CNTL">
++		<bitfield name="HIGHESTBANKBIT" low="7" high="8" type="uint"/>
++	</reg32>
+ 	<reg32 offset="0x0f10" name="TPL1_PERFCTR_TP_SEL_0" type="a5xx_tp_perfcounter_select"/>
+ 	<reg32 offset="0x0f11" name="TPL1_PERFCTR_TP_SEL_1" type="a5xx_tp_perfcounter_select"/>
+ 	<reg32 offset="0x0f12" name="TPL1_PERFCTR_TP_SEL_2" type="a5xx_tp_perfcounter_select"/>
+@@ -2752,12 +2756,6 @@ bit 7 for RECTLIST (clear) when z32s8 (used for clear of depth32?  not set
+ 		src via sampler, to enable scaling??)  0x2040 also used in this
+ 		case.
+ 	 -->
+-	<reg32 offset="0x2100" name="RB_2D_BLIT_CNTL"/>  <!-- same as 0x2180 -->
+-	<reg32 offset="0x2101" name="RB_2D_SRC_SOLID_DW0"/>
+-	<reg32 offset="0x2102" name="RB_2D_SRC_SOLID_DW1"/>
+-	<reg32 offset="0x2103" name="RB_2D_SRC_SOLID_DW2"/>
+-	<reg32 offset="0x2104" name="RB_2D_SRC_SOLID_DW3"/>
+-
+ 	<bitset name="a5xx_2d_surf_info" inline="yes">
+ 		<bitfield name="COLOR_FORMAT" low="0" high="7" type="a5xx_color_fmt"/>
+ 		<bitfield name="TILE_MODE" low="8" high="9" type="a5xx_tile_mode"/>
+@@ -2767,6 +2765,40 @@ bit 7 for RECTLIST (clear) when z32s8 (used for clear of depth32?  not set
+ 		<bitfield name="SRGB" pos="13" type="boolean"/>
+ 	</bitset>
+ 
++	<bitset name="a5xx_sp_a2d_output_info" inline="yes">
++		<bitfield name="HALF_PRECISION" pos="0" type="boolean"/>
++		<bitfield name="IFMT_TYPE" low="1" high="2" type="adreno_2d_output_ifmt_type"/>
++		<bitfield name="COLOR_FORMAT" low="3" high="10" type="a5xx_color_fmt"/>
++		<bitfield name="SRGB" pos="11" type="boolean"/>
++	</bitset>
++
++	<!-- The source the 2D core samples through, the same block as a6xx's
++	     TPL1_A2D_SRC_TEXTURE_*: -->
++	<reg32 offset="0x2000" name="TPL1_A2D_SRC_TEXTURE_INFO" type="a5xx_2d_surf_info"/>
++	<reg32 offset="0x2001" name="TPL1_A2D_SRC_TEXTURE_SIZE">
++		<bitfield name="WIDTH" low="0" high="14" type="uint"/>
++		<bitfield name="HEIGHT" low="15" high="29" type="uint"/>
++	</reg32>
++	<reg64 offset="0x2002" name="TPL1_A2D_SRC_TEXTURE_BASE" type="address"/>
++	<reg32 offset="0x2004" name="TPL1_A2D_SRC_TEXTURE_PITCH">
++		<bitfield name="PITCH" low="9" high="23" shr="6" type="uint"/>
++	</reg32>
++
++	<reg32 offset="0x2040" name="SP_A2D_OUTPUT_INFO" type="a5xx_sp_a2d_output_info"/>
++
++	<bitset name="a5xx_2d_blit_cntl" inline="yes">
++		<bitfield name="ROP" low="23" high="26" type="a3xx_rop_code"/>
++		<bitfield name="IFMT" low="28" high="30" type="adreno_2d_ifmt"/>
++		<bitfield name="UNK31" pos="31" type="boolean"/>
++	</bitset>
++
++	<reg32 offset="0x2100" name="RB_2D_BLIT_CNTL" type="a5xx_2d_blit_cntl"/>
++	<reg32 offset="0x2101" name="RB_2D_SRC_SOLID_DW0"/>
++	<reg32 offset="0x2102" name="RB_2D_SRC_SOLID_DW1"/>
++	<reg32 offset="0x2103" name="RB_2D_SRC_SOLID_DW2"/>
++	<reg32 offset="0x2104" name="RB_2D_SRC_SOLID_DW3"/>
++
++
+ 	<reg32 offset="0x2107" name="RB_2D_SRC_INFO" type="a5xx_2d_surf_info"/>
+ 	<reg64 offset="0x2108" name="RB_2D_SRC" type="address"/>
+ 	<reg32 offset="0x210a" name="RB_2D_SRC_SIZE">
+@@ -2784,7 +2816,7 @@ bit 7 for RECTLIST (clear) when z32s8 (used for clear of depth32?  not set
+         <reg32 offset="0x2142" name="RB_2D_SRC_FLAGS_PITCH" shr="6" type="uint"/>
+ 	<reg64 offset="0x2143" name="RB_2D_DST_FLAGS" type="address"/>
+         <reg32 offset="0x2145" name="RB_2D_DST_FLAGS_PITCH" shr="6" type="uint"/>
+-	<reg32 offset="0x2180" name="GRAS_2D_BLIT_CNTL"/> <!-- same as 0x2100 -->
++	<reg32 offset="0x2180" name="GRAS_2D_BLIT_CNTL" type="a5xx_2d_blit_cntl"/>
+ 	<!-- looks same as 0x2107: -->
+ 	<reg32 offset="0x2181" name="GRAS_2D_SRC_INFO" type="a5xx_2d_surf_info"/>
+ 	<!-- looks same as 0x2110: -->
+diff --git a/src/freedreno/registers/adreno/a6xx.xml b/src/freedreno/registers/adreno/a6xx.xml
+index 6cb0875..83f2d90 100644
+--- a/src/freedreno/registers/adreno/a6xx.xml
++++ b/src/freedreno/registers/adreno/a6xx.xml
+@@ -2173,7 +2173,7 @@ by a particular renderpass/blit.
+ 		<bitfield name="IS_SRC_YUV" pos="19" type="boolean"/>
+ 		<!-- some sort of channel mask, disabled channels are set to zero ? -->
+ 		<bitfield name="MASK" low="20" high="23"/>
+-		<bitfield name="IFMT" low="24" high="26" type="a6xx_2d_ifmt"/>
++		<bitfield name="IFMT" low="24" high="26" type="adreno_2d_ifmt"/>
+ 		<bitfield name="FULL_RANGE_YUV" pos="27" type="boolean"/>
+ 		<bitfield name="LINEAR_YUV" pos="28" type="boolean"/>
+ 		<bitfield name="RASTER_MODE" pos="29" type="a6xx_raster_mode"/>
+@@ -4337,15 +4337,10 @@ by a particular renderpass/blit.
+ 
+ 	<reg32 offset="0xab23" name="SP_UNKNOWN_AB23" variants="A8XX-"/>
+ 
+-	<enum name="a6xx_sp_a2d_output_ifmt_type">
+-		<value name="OUTPUT_IFMT_2D_FLOAT" value="0"/>
+-		<value name="OUTPUT_IFMT_2D_SINT" value="1"/>
+-		<value name="OUTPUT_IFMT_2D_UINT" value="2"/>
+-	</enum>
+ 
+ 	<bitset name="a6xx_sp_a2d_output_info" inline="yes">
+ 		<bitfield name="HALF_PRECISION" pos="0" type="boolean"/>
+-		<bitfield name="IFMT_TYPE" low="1" high="2" type="a6xx_sp_a2d_output_ifmt_type"/>
++		<bitfield name="IFMT_TYPE" low="1" high="2" type="adreno_2d_output_ifmt_type"/>
+ 		<!-- looks like HW only cares about the base type of this format,
+ 		     which matches the ifmt? -->
+ 		<bitfield name="COLOR_FORMAT" low="3" high="10" type="a6xx_format"/>
+diff --git a/src/freedreno/registers/adreno/a6xx_enums.xml b/src/freedreno/registers/adreno/a6xx_enums.xml
+index b44946f..18c2104 100644
+--- a/src/freedreno/registers/adreno/a6xx_enums.xml
++++ b/src/freedreno/registers/adreno/a6xx_enums.xml
+@@ -319,19 +319,6 @@ to upconvert to 32b float internally?
+ 32b float:   4
+ 16b float:   3
+  -->
+-<enum name="a6xx_2d_ifmt">
+-	<value value="0x7"  name="R2D_INT32"/>
+-	<value value="0x6"  name="R2D_INT16"/>
+-	<value value="0x5"  name="R2D_INT8"/>
+-	<value value="0x4"  name="R2D_FLOAT32"/>
+-	<value value="0x3"  name="R2D_FLOAT16"/>
+-	<value value="0x2"  name="R2D_SNORM8"/>
+-	<value value="0x1"  name="R2D_UNORM8_SRGB"/>
+-	<value value="0x0"  name="R2D_UNORM8"/>
+-
+-	<!-- Not a hw enum, used internally in driver -->
+-	<value value="0xff" name="R2D_NONE"/>
+-</enum>
+ 
+ <enum name="a6xx_tex_type">
+ 	<value name="A6XX_TEX_1D" value="0"/>
+diff --git a/src/freedreno/registers/adreno/adreno_common.xml b/src/freedreno/registers/adreno/adreno_common.xml
+index 195cee0..2ff2251 100644
+--- a/src/freedreno/registers/adreno/adreno_common.xml
++++ b/src/freedreno/registers/adreno/adreno_common.xml
+@@ -451,4 +451,26 @@ xsi:schemaLocation="https://gitlab.freedesktop.org/freedreno/ rules-fd.xsd">
+ 	 -->
+ </domain>
+ 
++<!-- The 2D blit core converts through an intermediate format.
++     Shared by a5xx ({RB,GRAS}_2D_BLIT_CNTL) and a6xx (A2D_BLT_CNTL). -->
++<enum name="adreno_2d_ifmt">
++	<value value="0x7"  name="R2D_INT32"/>
++	<value value="0x6"  name="R2D_INT16"/>
++	<value value="0x5"  name="R2D_INT8"/>
++	<value value="0x4"  name="R2D_FLOAT32"/>
++	<value value="0x3"  name="R2D_FLOAT16"/>
++	<value value="0x2"  name="R2D_SNORM8"/>
++	<value value="0x1"  name="R2D_UNORM8_SRGB"/>
++	<value value="0x0"  name="R2D_UNORM8"/>
++
++	<!-- Not a hw enum, used internally in driver -->
++	<value value="0xff" name="R2D_NONE"/>
++</enum>
++
++<enum name="adreno_2d_output_ifmt_type">
++	<value name="OUTPUT_IFMT_2D_FLOAT" value="0"/>
++	<value name="OUTPUT_IFMT_2D_SINT" value="1"/>
++	<value name="OUTPUT_IFMT_2D_UINT" value="2"/>
++</enum>
++
+ </database>
+diff --git a/src/freedreno/vulkan/tu_clear_blit.cc b/src/freedreno/vulkan/tu_clear_blit.cc
+index 387c7d5..b01867b 100644
+--- a/src/freedreno/vulkan/tu_clear_blit.cc
++++ b/src/freedreno/vulkan/tu_clear_blit.cc
+@@ -171,7 +171,7 @@ tu_pack_float32_for_d32(float val)
+ 
+ /* r2d_ = BLIT_OP_SCALE operations */
+ 
+-static enum a6xx_2d_ifmt
++static enum adreno_2d_ifmt
+ format_to_ifmt(enum pipe_format format)
+ {
+    if (format == PIPE_FORMAT_Z24_UNORM_S8_UINT ||
+@@ -334,7 +334,7 @@ r2d_clear_value(struct tu_cmd_buffer *cmd,
+    default:
+       assert(!util_format_is_depth_or_stencil(format));
+       const struct util_format_description *desc = util_format_description(format);
+-      enum a6xx_2d_ifmt ifmt = format_to_ifmt(format);
++      enum adreno_2d_ifmt ifmt = format_to_ifmt(format);
+ 
+       assert(desc->layout == UTIL_FORMAT_LAYOUT_PLAIN ||
+              format == PIPE_FORMAT_R11G11B10_FLOAT);
+@@ -565,7 +565,7 @@ r2d_setup_common(struct tu_cmd_buffer *cmd,
+ 
+    enum a6xx_format fmt = blit_base_format<CHIP>(dst_format, ubwc, false);
+    fixup_dst_format(src_format, &dst_format, &fmt);
+-   enum a6xx_2d_ifmt ifmt = format_to_ifmt(dst_format);
++   enum adreno_2d_ifmt ifmt = format_to_ifmt(dst_format);
+ 
+    enum a6xx_a2d_pixel_op pixel_op = PIXEL_OP_DISABLED;
+    enum adreno_rb_blend_factor color_src_factor = FACTOR_ZERO;
+@@ -625,7 +625,7 @@ r2d_setup_common(struct tu_cmd_buffer *cmd,
+    if (fmt == FMT6_10_10_10_2_UNORM_DEST)
+       fmt = FMT6_16_16_16_16_FLOAT;
+ 
+-   enum a6xx_sp_a2d_output_ifmt_type output_ifmt_type;
++   enum adreno_2d_output_ifmt_type output_ifmt_type;
+    if (util_format_is_pure_uint(dst_format))
+       output_ifmt_type = OUTPUT_IFMT_2D_UINT;
+    else if (util_format_is_pure_sint(dst_format))
+diff --git a/src/gallium/drivers/freedreno/a5xx/fd5_blitter.c b/src/gallium/drivers/freedreno/a5xx/fd5_blitter.c
+index 4539760..e3fcfc2 100644
+--- a/src/gallium/drivers/freedreno/a5xx/fd5_blitter.c
++++ b/src/gallium/drivers/freedreno/a5xx/fd5_blitter.c
+@@ -52,6 +52,7 @@ ok_format(enum pipe_format fmt)
+    case PIPE_FORMAT_R10SG10SB10SA2U_NORM:
+    case PIPE_FORMAT_B10G10R10A2_UINT:
+    case PIPE_FORMAT_R10G10B10A2_UINT:
++   case PIPE_FORMAT_B10G10R10X2_UNORM:
+       return false;
+    default:
+       break;
+@@ -79,12 +80,6 @@ ok_format_pair(enum pipe_format src, enum pipe_format dst)
+    if (src == dst)
+       return true;
+ 
+-   /* Above a dword the channel selection stops working: rgba8 -> r8 is
+-    * correct but rgba32f -> r32f is not, and neither is r32f -> rg32f.
+-    */
+-   if (util_format_get_blocksize(src) > 4 || util_format_get_blocksize(dst) > 4)
+-      return false;
+-
+    if (sd->layout != UTIL_FORMAT_LAYOUT_PLAIN ||
+        dd->layout != UTIL_FORMAT_LAYOUT_PLAIN)
+       return false;
+@@ -117,6 +112,71 @@ ok_format_pair(enum pipe_format src, enum pipe_format dst)
+    return true;
+ }
+ 
++static enum adreno_2d_ifmt
++fd5_ifmt(enum a5xx_color_fmt fmt)
++{
++   switch (fmt) {
++   case RB5_A8_UNORM:
++   case RB5_R8_UNORM:
++   case RB5_R8_SNORM:
++   case RB5_R8G8_UNORM:
++   case RB5_R8G8_SNORM:
++   case RB5_R8G8B8_UNORM:
++   case RB5_R8G8B8A8_UNORM:
++   case RB5_R8G8B8A8_SNORM:
++   case RB5_R4G4B4A4_UNORM:
++   case RB5_R5G5B5A1_UNORM:
++   case RB5_R5G6B5_UNORM:
++   case RB5_R10G10B10A2_UNORM:
++      return R2D_UNORM8;
++
++   case RB5_R32_UINT:
++   case RB5_R32_SINT:
++   case RB5_R32G32_UINT:
++   case RB5_R32G32_SINT:
++   case RB5_R32G32B32A32_UINT:
++   case RB5_R32G32B32A32_SINT:
++      return R2D_INT32;
++
++   case RB5_R16_UINT:
++   case RB5_R16_SINT:
++   case RB5_R16G16_UINT:
++   case RB5_R16G16_SINT:
++   case RB5_R16G16B16A16_UINT:
++   case RB5_R16G16B16A16_SINT:
++   case RB5_R10G10B10A2_UINT:
++      return R2D_INT16;
++
++   case RB5_R8_UINT:
++   case RB5_R8_SINT:
++   case RB5_R8G8_UINT:
++   case RB5_R8G8_SINT:
++   case RB5_R8G8B8A8_UINT:
++   case RB5_R8G8B8A8_SINT:
++      return R2D_INT8;
++
++   case RB5_R16_UNORM:
++   case RB5_R16_SNORM:
++   case RB5_R16G16_UNORM:
++   case RB5_R16G16_SNORM:
++   case RB5_R16G16B16A16_UNORM:
++   case RB5_R16G16B16A16_SNORM:
++   case RB5_R32_FLOAT:
++   case RB5_R32G32_FLOAT:
++   case RB5_R32G32B32A32_FLOAT:
++      return R2D_FLOAT32;
++
++   case RB5_R16_FLOAT:
++   case RB5_R16G16_FLOAT:
++   case RB5_R16G16B16A16_FLOAT:
++   case RB5_R11G11B10_FLOAT:
++      return R2D_FLOAT16;
++
++   default:
++      return R2D_UNORM8;
++   }
++}
++
+ static bool
+ can_do_blit(const struct pipe_blit_info *info)
+ {
+@@ -183,16 +243,23 @@ can_do_blit(const struct pipe_blit_info *info)
+ }
+ 
+ static void
+-emit_setup(struct fd_ringbuffer *ring)
++emit_setup(struct fd_ringbuffer *ring, const struct fd_screen *screen,
++           enum pipe_format dst_format)
+ {
++   enum a5xx_color_fmt dfmt = fd5_pipe2color(dst_format);
++   uint32_t blit_cntl = A5XX_RB_2D_BLIT_CNTL_ROP(ROP_COPY) |
++                        A5XX_RB_2D_BLIT_CNTL_IFMT(fd5_ifmt(dfmt)) |
++                        A5XX_RB_2D_BLIT_CNTL_UNK31;
++   uint32_t hbb = screen->highest_bank_bit - 13;
++
+    OUT_PKT4(ring, REG_A5XX_RB_RENDER_CNTL, 1);
+    OUT_RING(ring, 0x00000008);
+ 
+    OUT_PKT4(ring, REG_A5XX_RB_2D_BLIT_CNTL, 1);
+-   OUT_RING(ring, 0x86000000); /* RB_2D_BLIT_CNTL */
++   OUT_RING(ring, blit_cntl); /* RB_2D_BLIT_CNTL */
+ 
+    OUT_PKT4(ring, REG_A5XX_GRAS_2D_BLIT_CNTL, 1);
+-   OUT_RING(ring, 0x86000000); /* 2D_BLIT_CNTL */
++   OUT_RING(ring, blit_cntl); /* 2D_BLIT_CNTL */
+ 
+    OUT_PKT4(ring, REG_A5XX_UNKNOWN_2184, 1);
+    OUT_RING(ring, 0x00000009); /* UNKNOWN_2184 */
+@@ -201,13 +268,13 @@ emit_setup(struct fd_ringbuffer *ring)
+    OUT_RING(ring, A5XX_RB_CNTL_BYPASS);
+ 
+    OUT_PKT4(ring, REG_A5XX_RB_MODE_CNTL, 1);
+-   OUT_RING(ring, 0x00000004); /* RB_MODE_CNTL */
++   OUT_RING(ring, A5XX_RB_MODE_CNTL_HIGHESTBANKBIT(hbb));
+ 
+    OUT_PKT4(ring, REG_A5XX_SP_MODE_CNTL, 1);
+    OUT_RING(ring, 0x0000000c); /* SP_MODE_CNTL */
+ 
+    OUT_PKT4(ring, REG_A5XX_TPL1_MODE_CNTL, 1);
+-   OUT_RING(ring, 0x00000344); /* TPL1_MODE_CNTL */
++   OUT_RING(ring, 0x00000244 | A5XX_TPL1_MODE_CNTL_HIGHESTBANKBIT(hbb));
+ 
+    OUT_PKT4(ring, REG_A5XX_HLSQ_MODE_CNTL, 1);
+    OUT_RING(ring, 0x00000002); /* HLSQ_MODE_CNTL */
+@@ -317,11 +384,24 @@ emit_blit_buffer(struct fd_ringbuffer *ring, const struct pipe_blit_info *info)
+       OUT_RING(ring, A5XX_GRAS_2D_DST_INFO_COLOR_FORMAT(RB5_R8_UNORM) |
+                         A5XX_GRAS_2D_DST_INFO_COLOR_SWAP(WZYX));
+ 
++      OUT_PKT4(ring, REG_A5XX_TPL1_A2D_SRC_TEXTURE_INFO, 5);
++      OUT_RING(ring, A5XX_TPL1_A2D_SRC_TEXTURE_INFO_COLOR_FORMAT(RB5_R8_UNORM) |
++                        A5XX_TPL1_A2D_SRC_TEXTURE_INFO_TILE_MODE(TILE5_LINEAR) |
++                        A5XX_TPL1_A2D_SRC_TEXTURE_INFO_COLOR_SWAP(WZYX));
++      OUT_RING(ring, A5XX_TPL1_A2D_SRC_TEXTURE_SIZE_WIDTH(sshift + w) |
++                        A5XX_TPL1_A2D_SRC_TEXTURE_SIZE_HEIGHT(1));
++      OUT_RELOC(ring, src->bo, soff, 0, 0);
++      OUT_RING(ring, A5XX_TPL1_A2D_SRC_TEXTURE_PITCH_PITCH(p));
++
++      OUT_PKT4(ring, REG_A5XX_SP_A2D_OUTPUT_INFO, 1);
++      OUT_RING(ring, A5XX_SP_A2D_OUTPUT_INFO_IFMT_TYPE(OUTPUT_IFMT_2D_FLOAT) |
++                        A5XX_SP_A2D_OUTPUT_INFO_COLOR_FORMAT(RB5_R8_UNORM));
++
+       /*
+        * Blit command:
+        */
+       OUT_PKT7(ring, CP_BLIT, 5);
+-      OUT_RING(ring, CP_BLIT_0_OP(BLIT_OP_COPY));
++      OUT_RING(ring, CP_BLIT_0_OP(BLIT_OP_SCALE));
+       OUT_RING(ring, CP_BLIT_1_SRC_X1(sshift) | CP_BLIT_1_SRC_Y1(0));
+       OUT_RING(ring, CP_BLIT_2_SRC_X2(sshift + w - 1) | CP_BLIT_2_SRC_Y2(0));
+       OUT_RING(ring, CP_BLIT_3_DST_X1(dshift) | CP_BLIT_3_DST_Y1(0));
+@@ -343,6 +423,7 @@ emit_blit(struct fd_ringbuffer *ring, const struct pipe_blit_info *info)
+    enum a5xx_color_fmt sfmt, dfmt;
+    enum a5xx_tile_mode stile, dtile;
+    enum a3xx_color_swap sswap, dswap;
++   bool ssrgb, dsrgb;
+    unsigned spitch, dpitch;
+    unsigned sx1, sy1, sx2, sy2;
+    unsigned dx1, dy1, dx2, dy2;
+@@ -359,6 +440,11 @@ emit_blit(struct fd_ringbuffer *ring, const struct pipe_blit_info *info)
+    sswap = fd5_pipe2swap(info->src.format);
+    dswap = fd5_pipe2swap(info->dst.format);
+ 
++   ssrgb = util_format_is_srgb(info->src.format);
++   dsrgb = util_format_is_srgb(info->dst.format);
++   if (ssrgb == dsrgb)
++      ssrgb = dsrgb = false;
++
+    spitch = fd_resource_pitch(src, info->src.level);
+    dpitch = fd_resource_pitch(dst, info->dst.level);
+ 
+@@ -401,7 +487,8 @@ emit_blit(struct fd_ringbuffer *ring, const struct pipe_blit_info *info)
+       OUT_PKT4(ring, REG_A5XX_RB_2D_SRC_INFO, 9);
+       OUT_RING(ring, A5XX_RB_2D_SRC_INFO_COLOR_FORMAT(sfmt) |
+                         A5XX_RB_2D_SRC_INFO_TILE_MODE(stile) |
+-                        A5XX_RB_2D_SRC_INFO_COLOR_SWAP(sswap));
++                        A5XX_RB_2D_SRC_INFO_COLOR_SWAP(sswap) |
++                        COND(ssrgb, A5XX_RB_2D_SRC_INFO_SRGB));
+       OUT_RELOC(ring, src->bo, soff, 0, 0); /* RB_2D_SRC_LO/HI */
+       OUT_RING(ring, A5XX_RB_2D_SRC_SIZE_PITCH(spitch) |
+                         A5XX_RB_2D_SRC_SIZE_ARRAY_PITCH(sarray_pitch));
+@@ -414,7 +501,8 @@ emit_blit(struct fd_ringbuffer *ring, const struct pipe_blit_info *info)
+       OUT_PKT4(ring, REG_A5XX_GRAS_2D_SRC_INFO, 1);
+       OUT_RING(ring, A5XX_GRAS_2D_SRC_INFO_COLOR_FORMAT(sfmt) |
+                         A5XX_GRAS_2D_SRC_INFO_TILE_MODE(stile) |
+-                        A5XX_GRAS_2D_SRC_INFO_COLOR_SWAP(sswap));
++                        A5XX_GRAS_2D_SRC_INFO_COLOR_SWAP(sswap) |
++                        COND(ssrgb, A5XX_GRAS_2D_SRC_INFO_SRGB));
+ 
+       /*
+        * Emit destination:
+@@ -422,7 +510,8 @@ emit_blit(struct fd_ringbuffer *ring, const struct pipe_blit_info *info)
+       OUT_PKT4(ring, REG_A5XX_RB_2D_DST_INFO, 9);
+       OUT_RING(ring, A5XX_RB_2D_DST_INFO_COLOR_FORMAT(dfmt) |
+                         A5XX_RB_2D_DST_INFO_TILE_MODE(dtile) |
+-                        A5XX_RB_2D_DST_INFO_COLOR_SWAP(dswap));
++                        A5XX_RB_2D_DST_INFO_COLOR_SWAP(dswap) |
++                        COND(dsrgb, A5XX_RB_2D_DST_INFO_SRGB));
+       OUT_RELOC(ring, dst->bo, doff, 0, 0); /* RB_2D_DST_LO/HI */
+       OUT_RING(ring, A5XX_RB_2D_DST_SIZE_PITCH(dpitch) |
+                         A5XX_RB_2D_DST_SIZE_ARRAY_PITCH(darray_pitch));
+@@ -435,13 +524,42 @@ emit_blit(struct fd_ringbuffer *ring, const struct pipe_blit_info *info)
+       OUT_PKT4(ring, REG_A5XX_GRAS_2D_DST_INFO, 1);
+       OUT_RING(ring, A5XX_GRAS_2D_DST_INFO_COLOR_FORMAT(dfmt) |
+                         A5XX_GRAS_2D_DST_INFO_TILE_MODE(dtile) |
+-                        A5XX_GRAS_2D_DST_INFO_COLOR_SWAP(dswap));
++                        A5XX_GRAS_2D_DST_INFO_COLOR_SWAP(dswap) |
++                        COND(dsrgb, A5XX_GRAS_2D_DST_INFO_SRGB));
++
++      OUT_PKT4(ring, REG_A5XX_TPL1_A2D_SRC_TEXTURE_INFO, 5);
++      OUT_RING(ring, A5XX_TPL1_A2D_SRC_TEXTURE_INFO_COLOR_FORMAT(sfmt) |
++                        A5XX_TPL1_A2D_SRC_TEXTURE_INFO_TILE_MODE(stile) |
++                        A5XX_TPL1_A2D_SRC_TEXTURE_INFO_COLOR_SWAP(sswap) |
++                        COND(ssrgb, A5XX_TPL1_A2D_SRC_TEXTURE_INFO_SRGB));
++      OUT_RING(ring, A5XX_TPL1_A2D_SRC_TEXTURE_SIZE_WIDTH(
++                        u_minify(src->b.b.width0, info->src.level)) |
++                        A5XX_TPL1_A2D_SRC_TEXTURE_SIZE_HEIGHT(
++                           u_minify(src->b.b.height0, info->src.level)));
++      OUT_RELOC(ring, src->bo, soff, 0, 0);
++      OUT_RING(ring, A5XX_TPL1_A2D_SRC_TEXTURE_PITCH_PITCH(spitch));
++
++      enum adreno_2d_output_ifmt_type ifmt_type = OUTPUT_IFMT_2D_FLOAT;
++      if (util_format_is_depth_or_stencil(info->dst.format))
++         ifmt_type = OUTPUT_IFMT_2D_FLOAT;
++      else if (util_format_is_pure_uint(info->dst.format))
++         ifmt_type = OUTPUT_IFMT_2D_UINT;
++      else if (util_format_is_pure_sint(info->dst.format))
++         ifmt_type = OUTPUT_IFMT_2D_SINT;
++
++      OUT_PKT4(ring, REG_A5XX_SP_A2D_OUTPUT_INFO, 1);
++      OUT_RING(ring, COND(util_format_is_float16(info->src.format) ||
++                             info->src.format == PIPE_FORMAT_R11G11B10_FLOAT,
++                          A5XX_SP_A2D_OUTPUT_INFO_HALF_PRECISION) |
++                        A5XX_SP_A2D_OUTPUT_INFO_IFMT_TYPE(ifmt_type) |
++                        A5XX_SP_A2D_OUTPUT_INFO_COLOR_FORMAT(dfmt) |
++                        COND(dsrgb, A5XX_SP_A2D_OUTPUT_INFO_SRGB));
+ 
+       /*
+        * Blit command:
+        */
+       OUT_PKT7(ring, CP_BLIT, 5);
+-      OUT_RING(ring, CP_BLIT_0_OP(BLIT_OP_COPY));
++      OUT_RING(ring, CP_BLIT_0_OP(BLIT_OP_SCALE));
+       OUT_RING(ring, CP_BLIT_1_SRC_X1(sx1) | CP_BLIT_1_SRC_Y1(sy1));
+       OUT_RING(ring, CP_BLIT_2_SRC_X2(sx2) | CP_BLIT_2_SRC_Y2(sy2));
+       OUT_RING(ring, CP_BLIT_3_DST_X1(dx1) | CP_BLIT_3_DST_Y1(dy1));
+@@ -456,12 +574,22 @@ bool
+ fd5_blitter_blit(struct fd_context *ctx,
+                  const struct pipe_blit_info *info) assert_dt
+ {
++   struct pipe_blit_info unorm_info;
+    struct fd_batch *batch;
+ 
+    if (!can_do_blit(info)) {
+       return false;
+    }
+ 
++   /* An snorm blit would turn -128 into -127; copy the bits instead. */
++   if (info->src.format == info->dst.format &&
++       util_format_is_snorm(info->src.format)) {
++      unorm_info = *info;
++      unorm_info.src.format = unorm_info.dst.format =
++         util_format_snorm_to_unorm(info->src.format);
++      info = &unorm_info;
++   }
++
+    struct fd_resource *src = fd_resource(info->src.resource);
+    struct fd_resource *dst = fd_resource(info->dst.resource);
+ 
+@@ -478,7 +606,7 @@ fd5_blitter_blit(struct fd_context *ctx,
+ 
+    fd_batch_update_queries(batch);
+ 
+-   emit_setup(batch->draw);
++   emit_setup(batch->draw, batch->ctx->screen, info->dst.format);
+ 
+    if ((info->src.resource->target == PIPE_BUFFER) &&
+        (info->dst.resource->target == PIPE_BUFFER)) {
+diff --git a/src/gallium/drivers/freedreno/a5xx/fd5_emit.c b/src/gallium/drivers/freedreno/a5xx/fd5_emit.c
+index 1461824..10d0277 100644
+--- a/src/gallium/drivers/freedreno/a5xx/fd5_emit.c
++++ b/src/gallium/drivers/freedreno/a5xx/fd5_emit.c
+@@ -910,6 +910,7 @@ void
+ fd5_emit_restore(struct fd_batch *batch, struct fd_ringbuffer *ring)
+ {
+    struct fd_context *ctx = batch->ctx;
++   uint32_t hbb = ctx->screen->highest_bank_bit - 13;
+ 
+    fd5_set_render_mode(ctx, ring, BYPASS);
+    fd5_cache_flush(batch, ring);
+@@ -955,7 +956,7 @@ fd5_emit_restore(struct fd_batch *batch, struct fd_ringbuffer *ring)
+    OUT_RING(ring, 0x00000000); /* UNKNOWN_E293 */
+ 
+    OUT_PKT4(ring, REG_A5XX_RB_MODE_CNTL, 1);
+-   OUT_RING(ring, 0x00000044); /* RB_MODE_CNTL */
++   OUT_RING(ring, 0x00000040 | A5XX_RB_MODE_CNTL_HIGHESTBANKBIT(hbb));
+ 
+    OUT_PKT4(ring, REG_A5XX_RB_DBG_ECO_CNTL, 1);
+    OUT_RING(ring, 0x00100000); /* RB_DBG_ECO_CNTL */
+@@ -984,7 +985,7 @@ fd5_emit_restore(struct fd_batch *batch, struct fd_ringbuffer *ring)
+    }
+ 
+    OUT_PKT4(ring, REG_A5XX_TPL1_MODE_CNTL, 1);
+-   OUT_RING(ring, 0x00000544); /* TPL1_MODE_CNTL */
++   OUT_RING(ring, 0x00000444 | A5XX_TPL1_MODE_CNTL_HIGHESTBANKBIT(hbb));
+ 
+    OUT_PKT4(ring, REG_A5XX_HLSQ_TIMEOUT_THRESHOLD_0, 2);
+    OUT_RING(ring, 0x00000080); /* HLSQ_TIMEOUT_THRESHOLD_0 */
+diff --git a/src/gallium/drivers/freedreno/a6xx/fd6_blitter.cc b/src/gallium/drivers/freedreno/a6xx/fd6_blitter.cc
+index 726fc4c..413ccc3 100644
+--- a/src/gallium/drivers/freedreno/a6xx/fd6_blitter.cc
++++ b/src/gallium/drivers/freedreno/a6xx/fd6_blitter.cc
+@@ -26,7 +26,7 @@
+ #include "fd6_pack.h"
+ #include "fd6_resource.h"
+ 
+-static inline enum a6xx_2d_ifmt
++static inline enum adreno_2d_ifmt
+ fd6_ifmt(enum a6xx_format fmt)
+ {
+    switch (fmt) {
+@@ -302,7 +302,7 @@ emit_blit_setup(fd_ncrb<CHIP> &ncrb, enum pipe_format pfmt,
+ {
+    enum a6xx_format fmt = fd6_color_format(pfmt, TILE6_LINEAR);
+    bool is_srgb = util_format_is_srgb(pfmt);
+-   enum a6xx_2d_ifmt ifmt = fd6_ifmt(fmt);
++   enum adreno_2d_ifmt ifmt = fd6_ifmt(fmt);
+ 
+    if (is_srgb) {
+       assert(ifmt == R2D_UNORM8);
+@@ -329,7 +329,7 @@ emit_blit_setup(fd_ncrb<CHIP> &ncrb, enum pipe_format pfmt,
+    if (fmt == FMT6_10_10_10_2_UNORM_DEST)
+       fmt = FMT6_16_16_16_16_FLOAT;
+ 
+-   enum a6xx_sp_a2d_output_ifmt_type output_ifmt_type;
++   enum adreno_2d_output_ifmt_type output_ifmt_type;
+    if (util_format_is_pure_uint(pfmt))
+       output_ifmt_type = OUTPUT_IFMT_2D_UINT;
+    else if (util_format_is_pure_sint(pfmt))
+diff --git a/src/gallium/drivers/freedreno/freedreno_screen.c b/src/gallium/drivers/freedreno/freedreno_screen.c
+index e33674e..d182081 100644
+--- a/src/gallium/drivers/freedreno/freedreno_screen.c
++++ b/src/gallium/drivers/freedreno/freedreno_screen.c
+@@ -1062,6 +1062,10 @@ fd_screen_create(int fd,
+    screen->dev_info = info;
+    screen->info = &screen->dev_info;
+ 
++   if (fd_pipe_get_param(screen->pipe, FD_HIGHEST_BANK_BIT, &val) || !val)
++      val = screen->info->highest_bank_bit;
++   screen->highest_bank_bit = val;
++
+    switch (screen->gen) {
+    case 2:
+       fd2_screen_init(pscreen);
+diff --git a/src/gallium/drivers/freedreno/freedreno_screen.h b/src/gallium/drivers/freedreno/freedreno_screen.h
+index f9e239a..e477019 100644
+--- a/src/gallium/drivers/freedreno/freedreno_screen.h
++++ b/src/gallium/drivers/freedreno/freedreno_screen.h
+@@ -63,6 +63,7 @@ struct fd_screen {
+    uint32_t gmemsize_bytes;
+ 
+    uint64_t uche_trap_base;
++   uint32_t highest_bank_bit;
+ 
+    const struct fd_dev_id *dev_id;
+    uint8_t gen;      /* GPU (major) generation */
+-- 
+2.47.3
+

@@ -3,6 +3,8 @@
 #
 #   modemmanager : allow QMI modem without a net/data port (sdm660 mainline
 #                  has no IPA/BAM data path) so SIM/SMS/registration work.
+#   mesa         : keep the a5xx 2D-blit fix in libgallium after an upgrade
+#                  (see userspace/mesa/README.md).
 #
 # Triggered by /etc/pacman.d/hooks/99-local-patches.hook.
 
@@ -13,5 +15,16 @@ if [ -f "$PATCHED/ModemManager" ]; then
     install -m755 "$PATCHED/ModemManager" /usr/bin/ModemManager
     install -m755 "$PATCHED/ModemManager" /usr/sbin/ModemManager
 fi
+
+# The libgallium filename contains the ABI version. Only restore it when the
+# installed libEGL_mesa still asks for that exact soname; after a Mesa
+# soname bump the old file is stale and must be rebuilt from userspace/mesa.
+for lib in "$PATCHED"/libgallium-*.so; do
+    [ -f "$lib" ] || continue
+    name=$(basename "$lib")
+    if grep -aq "$name" /usr/lib/libEGL_mesa.so.0 2>/dev/null; then
+        install -m755 "$lib" "/usr/lib/$name"
+    fi
+done
 
 exit 0

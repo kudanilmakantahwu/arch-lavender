@@ -1,13 +1,16 @@
 # userspace
 
-Everything in this directory is copied into the root filesystem by
-`rootfs/build-rootfs.sh`:
+`rootfs/build-rootfs.sh` installs the units, scripts, and audio profile from
+this directory into the root filesystem. `mesa/` is different: it holds
+source-build inputs and is not copied as-is; the built `libgallium` is what
+gets installed.
 
 | Directory | Contents |
 | --- | --- |
 | `base/` | Qualcomm modem/DIAG services, the UIM init script, USB networking debug fallback, zram, and the ModemManager "no net port" patch. |
 | `audio/` | ALSA UCM2 profile for the SDM660 sound card (speaker + microphone routing) and the audio `modules-load.d` list. |
 | `gui/` | The Phosh systemd unit used by the default graphical session. |
+| `mesa/` | The a5xx/FD512 2D-blit fix: prebuilt `libgallium`, rebased Mesa backport, `build-libgallium.sh`, and ABI notes. |
 
 ## base
 
@@ -65,6 +68,21 @@ it automatically after a package upgrade.
 `base/bin/build-qcom.sh` builds `qrtr`, `tqftpserv`, `rmtfs`, `pd-mapper`, and
 `diag-router` from <https://github.com/linux-msm>.  The released rootfs already
 contains them; the script is here so the binaries are not a black box.
+
+## mesa
+
+`mesa/patches/0001-freedreno-a5xx-2d-blit-and-hbb.patch` is the rebased
+upstream fix for the Adreno 512 2D copy that silently writes nothing. It
+breaks `glTexSubImage2D` uploads into busy textures, which appears as missing
+glyphs and black texture tiles.
+
+`mesa/libgallium-26.2.6-arch1.1.so` is the prebuilt ABI-matched library
+(`SHA256SUMS` is next to it); `rootfs/build-rootfs.sh` installs it
+automatically. `mesa/build-libgallium.sh` rebuilds it from a Mesa 26.2.6 tree
+with the required `-Dplatforms=wayland,x11` and `-Dopengl=true`, and can
+install it plus restart Phosh. See
+[`mesa/README.md`](mesa/README.md) for the ABI checks, rootfs integration,
+rollback, and evidence. This is a userspace fix; the kernel is not patched.
 
 ## audio
 

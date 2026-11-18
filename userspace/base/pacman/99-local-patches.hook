@@ -3,8 +3,9 @@ Operation = Install
 Operation = Upgrade
 Type = Package
 Target = modemmanager
+Target = mesa
 
 [Action]
-Description = Re-applying local patch (ModemManager no-data-port)
+Description = Re-applying local patches (ModemManager, Mesa libgallium)
 When = PostTransaction
 Exec = /usr/local/sbin/reinstall-patched-libs

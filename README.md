@@ -120,12 +120,17 @@ The default install boots to `graphical.target` and starts Phosh on `tty1`
 (phoc + squeekboard, user `alarm`). SSH over USB and WiFi remains enabled.
 
 The image runs the GL renderer (`GSK_RENDERER=ngl`): text scrolling reaches
-~50 fps against ~23 fps with cairo on the same 4000-line GTK4 text view, and a
-scroll stress test with ngl showed no missing glyphs. Mesa's UBWC compression
-still corrupts buffers shared with Firefox/WebRender, so the image exports
-`FD_MESA_DEBUG=noubwc` as well; without it pages show magenta blocks or stay
-blank. If a program still renders badly, check that the variables reached its
-environment:
+~50 fps against ~23 fps with cairo on the same 4000-line GTK4 text view.
+
+The rootfs also installs the patched a5xx `libgallium` from `userspace/mesa/`.
+An ABI-matched prebuilt library is included, and the backport plus
+`build-libgallium.sh` are there to rebuild it. Without it, Mesa's 2D blit
+silently drops staging texture uploads and GTK/browser text loses glyphs; the
+renderer choice alone does not fix that bug. Mesa's UBWC
+compression still corrupts buffers shared with Firefox/WebRender, so the image
+exports `FD_MESA_DEBUG=noubwc` as well; without it pages show magenta blocks or
+stay blank. If a program still renders badly, check that the variables reached
+its environment:
 
 ```sh
 tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep -E 'GSK_RENDERER|FD_MESA_DEBUG'
@@ -163,7 +168,8 @@ session misbehaves. `tty1` is reserved for Phosh.
 │   └── overlay/             /etc/fstab, shadow, environment, sshd, USB networking
 ├── userspace/
 │   ├── base/                Modem/DIAG units, USB gadget, zram, helpers
-│   └── gui/                 Phosh systemd unit (cairo renderer workaround)
+│   ├── gui/                 Phosh systemd unit (ngl renderer)
+│   └── mesa/                a5xx 2D-blit fix: prebuilt lib, backport, build script
 ├── scripts/
 │   ├── capture-rootfs.sh    Sanitized rootfs capture (run on the phone)
 │   ├── flash.sh             Fastboot helper script for userdata and boot partitions

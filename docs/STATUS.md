@@ -54,7 +54,7 @@ broken or untested, and is described in the sections below.
 | GPS | Broken | — |
 | Suspend / Deep Sleep | Untested | — |
 | Fingerprint Sensor | Broken | — |
-| Phosh / GUI Session | Working | Default UI; GL renderer (~50 fps scroll vs 23 with cairo) and `FD_MESA_DEBUG=noubwc` for the Adreno 512 UBWC bug |
+| Phosh / GUI Session | Working | Default UI; GL renderer (~50 fps scroll vs 23 with cairo), patched a5xx `libgallium` for the 2D-blit glyph bug, and `FD_MESA_DEBUG=noubwc` for the Adreno 512 UBWC bug |
 
 Measured defaults and the A/B tests behind them (renderer, zram, GPU
 governor, speaker level, 3x retest) are in
@@ -79,7 +79,9 @@ network, and modem path are identical regardless of how the session is used.
 
 - Boot, reboot, and shutdown
 - Phosh desktop on `tty1`, with squeekboard on-screen keyboard
-- GL renderer (`ngl`) for ~2x faster scrolling; `cairo` kept as the glyph-bug fallback
+- GL renderer (`ngl`) for ~2x faster scrolling; the patched a5xx `libgallium`
+  fixes the 2D-blit glyph/texture loss (`userspace/mesa/`), while `cairo`
+  remains a temporary fallback if a program still misrenders
 - UBWC disabled for the session, so Firefox/WebRender and other GPU apps render correctly
 - Console on `tty2` with a readable 16×32 font
 - SSH over USB RNDIS (`172.16.42.1`)
@@ -180,7 +182,7 @@ mode. Charge the phone while the system is booted.
 | WiFi dead after a disconnect | reboot; the `0006` patch prevents the firmware crash, but a wedged device still needs a reboot |
 | ModemManager patched binary lost after upgrade | `pacman` hook restores it from `/usr/local/lib/patched/ModemManager`; if the ABI changed, rebuild it |
 | Root filesystem needs repair | the initramfs runs `e2fsck -p`, then `e2fsck -f -y` |
-| GTK4 text loses random glyphs | `GSK_RENDERER=cairo` is the fallback if the default `ngl` renderer misrenders; restart `phosh` after changing it |
+| GTK4 text loses random glyphs | install the patched `libgallium` from `userspace/mesa/` and restart `phosh`; that fixes the a512 2D-blit bug. `GSK_RENDERER=cairo` is only a temporary fallback |
 | Firefox shows magenta blocks or blank pages | `FD_MESA_DEBUG=noubwc` (already the default); restart `phosh` after changing it |
 | No sound, PipeWire shows `stereo-fallback` | install the UCM2 profile from `userspace/audio`, then `systemctl --user restart wireplumber` |
 | In-call audio is silent | not supported yet: the kernel has no `q6voice` voice-call DSP driver |
@@ -199,3 +201,9 @@ dmesg | tail -100
 
 and whether the session starts (check `systemctl status phosh` and
 `tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep -E 'GSK_RENDERER|FD_MESA_DEBUG'`).
+For glyph/texture loss also record the Mesa ABI actually in use:
+
+```sh
+readelf -d /usr/lib/libEGL_mesa.so.0 | grep libgallium
+sha256sum /usr/lib/libgallium-*.so
+```
