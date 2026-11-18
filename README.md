@@ -44,10 +44,11 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **Flashlight / Torch** | Broken | — |
 | **Cameras** | Broken | — |
 | **Sensors** | Broken | — |
-| **Video Decoding** | Untested | Hardware acceleration untested |
+| **Video Decoding** | Partial | VP8/VP9 software decode works; H.264 via `qcom-venus` is broken (see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)) |
 | **GPS** | Broken | — |
 | **Suspend / Deep Sleep** | Untested | — |
 | **Fingerprint Sensor** | Broken | — |
+| **Waydroid (optional)** | Working | Not enabled by default; occasional font glitches, otherwise stable |
 | **Phosh / GUI Session** | Working | Default UI; GL renderer (`GSK_RENDERER=ngl`, ~2x faster than cairo) plus `FD_MESA_DEBUG=noubwc` for the Adreno 512 UBWC bug, see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
 
 For detailed version history and logs, see [`docs/STATUS.md`](docs/STATUS.md);

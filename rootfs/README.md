@@ -16,8 +16,10 @@ The capture is produced by
 - pacman private keys (`secring.gpg`, `private-keys-v1.d`,
   `openpgp-revocs.d`) while keeping the public keyring,
 - saved NetworkManager connections and `/etc/NetworkManager/conf.d`,
+- `/var/lib/waydroid` (Android images and user data),
 - `/etc/resolv.conf`, DHCP leases, `/var/lib/dbus/machine-id`,
-- logs, caches, crash dumps, the old `6.19.10-sdm660` module tree.
+- logs, caches, crash dumps, the old `6.19.10-sdm660` module tree,
+- the lab-only `/opt/mesa-hbb` build and stale `libwlroots` helper.
 
 Empty `/root` and `/home/alarm` directories are recreated by
 `build-rootfs.sh` with the correct owners. The build-only `maf` account is

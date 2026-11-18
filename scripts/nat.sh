@@ -50,7 +50,7 @@ iptables -C FORWARD -i "$WAN" -o "$IFACE" -m conntrack --ctstate RELATED,ESTABLI
 
 cat <<EOF
 
-NAT is enabled. On the phone (console on tty1, or over ssh) run:
+NAT is enabled. On the phone (console on tty2, or over ssh) run:
 
     ip route replace default via 172.16.42.2 dev usb0
     printf 'nameserver 1.1.1.1\n' > /etc/resolv.conf

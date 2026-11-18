@@ -66,7 +66,9 @@ docker run --rm \
 1. installs `clang`, `lld`, `llvm`, `bc`, `bison`, `flex`, `dtc`, `kmod`,
    `pahole`, `openssl`, `xz`, `zstd`, and friends;
 2. downloads the pinned commit tarball and verifies its SHA-256;
-3. applies `patches/*.patch` only when `APPLY_PATCHES=1`;
+3. applies `patches/*.patch` only when `APPLY_PATCHES=1`, then always applies
+   `patches/local/*.patch` (the MAX98937 speaker-amp driver and lavender audio
+   device-tree nodes);
 4. copies the pmOS config and runs `make olddefconfig`;
 5. builds `make ARCH=arm64 LLVM=1 all Image.gz modules`;
 6. installs modules with `INSTALL_MOD_STRIP=1`;

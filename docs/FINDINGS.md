@@ -289,9 +289,9 @@ All runs below use the installed system-wide library, no `/opt` or
   (`SIGSEGV`) dumped during the forced `systemctl restart phosh`; the new
   phoc (PID 26908 after the rebuild) starts cleanly. Treat that teardown crash
   as the known phoc cleanup issue, separate from rendering.
-- Waydroid container/session start, but `waydroid show-full-ui` loops on
-  `Failed to get service waydroidplatform`; Android UI does not come up. This is
-  a Waydroid/binder issue on the current setup, not a Mesa rendering result.
+- Waydroid is usable: the container and Android UI start and stay up. It can
+  show occasional font glitches, but they do not affect normal use; keep it
+  optional and do not enable it in the release image by default.
 
 ### A10. Remaining work
 
@@ -307,8 +307,8 @@ All runs below use the installed system-wide library, no `/opt` or
 - Epiphany is broken independently of Mesa: `WebKitWebProcess` aborts in the
   Epiphany web-process extension. Debug the WebKit/Epiphany packaging on this
   image separately; Angelfish and Firefox are the working browsers.
-- Fix/decide Waydroid separately (binder/platform service); it is not blocked
-  by the glyph fix.
+- Keep Waydroid optional (occasional font glitches); it is not blocked by the
+  glyph fix.
 - Verify squeekboard and the lock screen after a clean reboot (session restart
   already keeps them working).
 

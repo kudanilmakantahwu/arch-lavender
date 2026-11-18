@@ -554,13 +554,21 @@ the IPA data path.
 
 ### Recommended package set
 
-This is the tested Arch/ALARM package set (Phosh, GNOME apps, media, and
-Waydroid support). Everything below exists in the `core`, `extra`, `alarm`, or
-`aur` repositories:
+This is the tested Arch/ALARM package set (Phosh, GNOME apps, and media).
+Everything below exists in the `core`, `extra`, `alarm`, or `aur` repositories:
 
 ```sh
 sudo pacman -Syu
-sudo pacman -S --needed phosh phoc squeekboard phosh-mobile-settings phosh-tour xdg-desktop-portal-phosh gnome-session gnome-shell pipewire-pulse wireplumber wpa_supplicant networkmanager gnome-keyring modemmanager nano vim firefox waydroid gnome-calendar gnome-console gnome-weather gnome-text-editor noto-fonts-emoji ttf-droid nautilus chatty gnome-software gst-libav gnome-contacts gvfs gvfs-mtp gvfs-gphoto2 gvfs-afc gvfs-smb gvfs-nfs gvfs-goa gvfs-dnssd gnome-calculator gnome-user-share showtime decibels gst-plugins-bad gst-plugins-good gst-plugin-dav1d rygel flatpak snapshot tuned-ppd tuned gnome-clocks gnome-maps loupe papers fprintd
+sudo pacman -S --needed phosh phoc squeekboard phosh-mobile-settings phosh-tour xdg-desktop-portal-phosh gnome-session gnome-shell pipewire-pulse wireplumber wpa_supplicant networkmanager gnome-keyring modemmanager nano vim firefox gnome-calendar gnome-console gnome-weather gnome-text-editor noto-fonts-emoji ttf-droid nautilus chatty gnome-software gst-libav gnome-contacts gvfs gvfs-mtp gvfs-gphoto2 gvfs-afc gvfs-smb gvfs-nfs gvfs-goa gvfs-dnssd gnome-calculator gnome-user-share showtime decibels gst-plugins-bad gst-plugins-good gst-plugin-dav1d rygel flatpak snapshot tuned-ppd tuned gnome-clocks gnome-maps loupe papers fprintd
+```
+
+Waydroid is **optional** and is not enabled by the release image. It works on
+this device, but can show occasional font glitches. To use it:
+
+```sh
+sudo pacman -S --needed waydroid
+sudo waydroid init
+sudo systemctl enable --now waydroid-container
 ```
 
 These are **not** in the ALARM repositories and need AUR or an alternative:
@@ -611,7 +619,7 @@ The kernel is not managed by `pacman`. To update it:
 3. Reboot into fastboot and flash the matching boot image:
 
    ```sh
-   fastboot flash boot ~/lavender-assets/arch-lavender-boot-7.2.3.img
+   fastboot flash boot ~/lavender-assets/arch-lavender-boot.img
    ```
 
    The boot image contains the kernel and the initramfs. Flashing only the

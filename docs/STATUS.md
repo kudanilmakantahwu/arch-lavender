@@ -50,10 +50,11 @@ broken or untested, and is described in the sections below.
 | Flashlight / Torch | Broken | No working LED device |
 | Cameras | Broken | — |
 | Sensors | Broken | `qcom_sns_reg` fails to load firmware |
-| Video Decoding | Untested | Hardware acceleration untested |
+| Video Decoding | Partial | VP8/VP9 software decode works; H.264 via `qcom-venus` is broken |
 | GPS | Broken | — |
-| Suspend / Deep Sleep | Untested | — |
+| Suspend / Deep Sleep | Untested | s2idle is disabled by the shipped sleep policy |
 | Fingerprint Sensor | Broken | — |
+| Waydroid (optional) | Working | Not enabled by default; occasional font glitches, otherwise stable |
 | Phosh / GUI Session | Working | Default UI; GL renderer (~50 fps scroll vs 23 with cairo), patched a5xx `libgallium` for the 2D-blit glyph bug, and `FD_MESA_DEBUG=noubwc` for the Adreno 512 UBWC bug |
 
 Measured defaults and the A/B tests behind them (renderer, zram, GPU

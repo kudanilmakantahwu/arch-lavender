@@ -19,6 +19,7 @@
 #   * authorized_keys, /home, /root      -> user data and browser/SMS history
 #   * pacman private keys                -> public keyring is kept
 #   * saved WiFi / NetworkManager state  -> contains the builder's networks
+#   * /var/lib/waydroid                  -> Android images and user data
 #   * machine-id, random-seed, resolv.conf, DHCP leases
 #   * logs, caches, crash dumps, build trees
 #
@@ -49,6 +50,7 @@ exec tar -C / \
     --exclude=./var/lib/systemd/linger \
     --exclude=./var/lib/dbus/machine-id \
     --exclude=./var/lib/NetworkManager \
+    --exclude=./var/lib/waydroid \
     --exclude=./var/lib/bluetooth \
     --exclude=./var/lib/geoclue \
     --exclude=./var/lib/AccountsService \

@@ -71,7 +71,7 @@ cp -a "$REPO/rootfs/overlay/." "$MNT/"
 # `maf` account plus leftovers from the old headless/experimental GUI.  This
 # image ships root and alarm only, and Phosh is the only session.
 echo "==> removing build account and stale GUI helpers"
-for f in etc/passwd etc/group etc/shadow etc/gshadow; do
+for f in etc/passwd etc/group etc/shadow etc/gshadow etc/subuid etc/subgid; do
     [ -f "$MNT/$f" ] && sed -i '/^maf:/d' "$MNT/$f"
 done
 sed -i -e 's/,maf\>//g' -e 's/\<maf,//g' -e 's/:\<maf\>:/::/g' "$MNT/etc/group" 2>/dev/null || true
@@ -84,6 +84,8 @@ rm -f "$MNT/usr/local/bin/fbkeyboard" \
       "$MNT/etc/systemd/system/touch-zoom.service" \
       "$MNT/etc/systemd/system/graphical.target.wants/touch-zoom.service" \
       "$MNT/usr/local/lib/patched/libwlroots-0.20.so"
+# Lab-only Mesa build; the release uses the patched libgallium in /usr/lib.
+rm -rf "$MNT/opt/mesa-hbb"
 
 # When the captured rootfs already carries the 7.2.3 module tree, drop older
 # sdm660 trees (rollback copies) so depmod only sees the running kernel.
@@ -273,7 +275,13 @@ fi
 
 # Phosh owns tty1.  Keep getty off that VT so it cannot fight the compositor,
 # and drop any stale headless keyboard unit from the captured image.
-rm -f "$MNT/etc/systemd/system/getty@tty1.service" \
+#
+# Waydroid is optional and is not installed in the release base.  If a capture
+# still carries it, do not start the container at boot and never ship
+# /var/lib/waydroid (Android images/user data).  Users who want it install the
+# package, run `waydroid init`, and enable waydroid-container.service.
+rm -f "$MNT/etc/systemd/system/multi-user.target.wants/waydroid-container.service" \
+      "$MNT/etc/systemd/system/getty@tty1.service" \
       "$MNT/etc/systemd/system/getty.target.wants/getty@tty1.service" \
       "$MNT/etc/systemd/system/multi-user.target.wants/getty@tty1.service" \
       "$MNT/etc/systemd/system/multi-user.target.wants/fbkeyboard.service"
