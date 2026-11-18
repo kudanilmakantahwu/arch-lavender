@@ -1,4 +1,4 @@
-# Findings: lavender glyph corruption and stutter
+# Findings: lavender glyph corruption, stutter, and speaker loudness
 
 Running log. Newest results go at the bottom of each section. Commands and
 logs are in English; user-facing summaries are in Indonesian.
@@ -386,3 +386,49 @@ Pending. Known measurements from the previous session (to be re-validated):
 - GPU residency during scroll: 588 MHz 97.1%, 465 MHz 2.9%.
 These were measured with a local synthetic-ish page and are not yet accepted as
 evidence for real sites.
+
+## C. Speaker: clean but ~48 dB too quiet (FE/BE format mismatch)
+
+Reported 2026-11-19.  The main speaker played clean audio, but even at 100% it
+was only just audible; the same phone is loud under the vendor ROM.
+
+Ruled out before the format was found:
+
+- Source and userspace: the angelfish playback PCM peaked at -5.4 dBFS
+  (RMS -18.1 dBFS); `wpctl` sink volume was 1.00 and `pactl` reported
+  100%/0.00 dB for both sink and stream, unmuted.
+- Amplifier: MAX98937 revision `0x43`; the 62-entry init sequence matched the
+  vendor `max98937_reg_common_map` plus channel map; live registers matched
+  the vendor values; `GLOBAL_EN` (`0x0500`) and `SPK_EN` (`0x0039`) were set
+  during playback.
+- Routing and clocks: FE->BE route `PRI_MI2S_RX Audio Mixer MultiMedia1=on`,
+  pinmux on GPIO12-15 was `pri_mi2s`/`pri_mi2s_ws`, and the Q6AFE port was
+  48 kHz/16-bit/2ch/SD0.
+- Gain: vendor `Digital Volume 56` (-2 dB) with `Speaker Volume 6` (+21 dB)
+  did not change the loudness; the current limit was already the vendor
+  maximum raw `0x40` (4.10 A).
+
+The mismatch: while playing, `hw:0,0` (the `MultiMedia1` front end) was open
+at `S24_LE`, 2ch, 48 kHz, but the machine driver's BE fixup forces Primary
+MI2S to `S16_LE`, 2ch, 48 kHz (`MI2S_BCLK_RATE` 1,536,000 = 48k x 2 x 16).
+The Q6 DSP behaves as if only the low 16 bits of each 24-bit sample reach the
+MAX98937, which is 1/256 of the amplitude, i.e. -48.16 dB.  The vendor kernel
+never hits this: `mi2s_rx_cfg[PRIM_MI2S]` is `{48000, S16_LE, 2}`, so the
+vendor HAL always feeds the DSP 16-bit samples.
+
+Test and fix: adding a WirePlumber rule that sets `audio.format = "S16LE"` on
+the speaker sink (`alsa_output.platform-sound.HiFi__Speaker__sink`) restored
+normal loudness on the same YouTube video at 100%; the user confirmed it was
+loud and normal, with no distortion at full volume.  The sink node shows
+`audio.format = "S16LE"`.  A 130-sample live check during both Linux
+(angelfish) and Waydroid playback reported `S16_LE`, 48 kHz, 2 channels for
+every sample.  The rule lives at
+`userspace/audio/wireplumber/wireplumber.conf.d/50-lavender-s16.conf` and
+`rootfs/build-rootfs.sh` installs it to `/etc/wireplumber/...`, so it covers
+every client on the speaker sink, including Waydroid's PulseAudio output;
+headphone and microphone nodes are not matched.
+
+Do not raise `Digital Volume` to compensate: it cannot restore the truncated
+low bits and only adds clipping gain.  A true 24-bit path would need the BE
+format, BCLK ratio, and MAX98937 PCM mode changed together; 16-bit matches
+the vendor configuration and the amp's init sequence.

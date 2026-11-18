@@ -496,10 +496,103 @@ Check the routing and the amplifier state:
 
 ```sh
 amixer -c 0 cset name='PRI_MI2S_RX Audio Mixer MultiMedia1' on
-amixer -c 0 cset name='Speaker Volume' 6   # 6 is the maximum; only 0/2/4/6 exist
-amixer -c 0 cset name='Digital Volume' 127  # 127 is +5.9 dB over the old 100
+# "Speaker Volume": 0 = +3 dB, 5 = +18 dB (vendor default), 6 = +21 dB
+# (the shipped profile uses 6).
+# "Digital Volume": 0 = -16 dB, 56 = -2 dB (vendor default), 64 = 0 dB.
+# Do not raise Digital Volume above 56; use PipeWire's per-stream volume.
+amixer -c 0 cset name='Digital Volume' 56
+amixer -c 0 cset name='Speaker Volume' 6
 speaker-test -D hw:0,0 -c 2 -t sine -f 800 -l 1
 ```
+
+`speaker-test -D hw:0,0` bypasses PipeWire's software volume and plays at the
+hardware gain.  Turn the phone's volume down first and do not hold the speaker
+to your ear.
+
+### Speaker crackles, or is loud on a test tone but quiet in apps
+
+An older version of the UCM profile set `Digital Volume` to 127.  That is
+**+15.75 dB** of digital gain, not "a bit over 100": anything near full scale
+clips the DAC, which is the crackle.  A direct `aplay` or `speaker-test` also
+bypasses PipeWire's software volume, so it was ~20 dB louder than the same
+file played from an app.
+
+Keep `Digital Volume` at 56 (-2 dB, the vendor value) and let PipeWire's
+per-stream volume do the attenuation.  The shipped profile uses `Speaker
+Volume 6` (+21 dB); the vendor default is 5 (+18 dB).  Check them:
+
+```sh
+amixer -c 0 cget name='Digital Volume'
+amixer -c 0 cget name='Speaker Volume'
+amixer -c 0 cget name='Amp DSP Switch'   # must be off
+```
+
+`Amp DSP Switch=on` enables the brownout DSP, which this profile does not use.
+Turning it on by hand can leave the amp enabled but silent; the UCM keeps it
+off, matching the driver's init sequence.
+
+### Speaker is clean but extremely quiet in apps
+
+Symptom: the speaker works, the audio is clean, but even at 100% it is only
+just audible.  A direct `aplay -f S16_LE` on `hw:0,0` can be loud because it
+opens the PCM at the backend's 16-bit format; PipeWire's default is different.
+
+This is the 24-bit front end / 16-bit backend mismatch.  While audio is
+playing, check the live format:
+
+```sh
+cat /proc/asound/card0/pcm0p/sub0/hw_params
+```
+
+`format: S24_LE` is wrong for the speaker path.  The machine driver fixes
+Primary MI2S at 48 kHz/S16_LE, and the Q6 DSP behaves as if only the low 16
+bits of every 24-bit sample reach the MAX98937: about 48 dB (a factor of 256)
+of loss.  The vendor kernel never hits this because its
+`mi2s_rx_cfg[PRIM_MI2S]` is already `S16_LE`.
+
+The fix is the WirePlumber rule shipped in `userspace/audio`:
+
+```sh
+sudo install -Dm644 \
+    userspace/audio/wireplumber/wireplumber.conf.d/50-lavender-s16.conf \
+    /etc/wireplumber/wireplumber.conf.d/50-lavender-s16.conf
+systemctl --user restart wireplumber
+```
+
+Confirm the node property and play something:
+
+```sh
+wpctl inspect @DEFAULT_AUDIO_SINK@ | grep audio.format   # audio.format = "S16LE"
+cat /proc/asound/card0/pcm0p/sub0/hw_params              # format: S16_LE
+```
+
+The rule matches the speaker sink only, so headphone playback keeps its
+native format.  Do not "fix" this by raising `Digital Volume`; that only adds
+clipping gain and cannot recover the missing bits.
+
+### Audio is silent after a suspend/resume or a reboot
+
+WirePlumber remembers a volume and mute flag per card name.  When a failed
+suspend/resume re-registers the card it gets a `.2`/`.24` suffix, and an old
+muted/0% entry can be restored for the new name.  Check the live sink and the
+saved routes:
+
+```sh
+pactl get-sink-volume @DEFAULT_SINK@
+pactl get-sink-mute @DEFAULT_SINK@
+cat ~/.local/state/wireplumber/default-routes
+```
+
+If the live sink is muted or at 0%, restore it:
+
+```sh
+pactl set-sink-mute @DEFAULT_SINK@ 0
+pactl set-sink-volume @DEFAULT_SINK@ 100%
+```
+
+The shipped image disables automatic suspend (`sleep.conf.d` and
+`lavender-session-defaults`) because s2idle hangs on this kernel.  Do not
+re-enable it just to save power; power the phone off instead.
 
 While a tone is playing, the amp registers should read (via `/dev/i2c-1`,
 `i2cset`/`i2cget` or a small script):

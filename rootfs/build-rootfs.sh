@@ -209,15 +209,26 @@ for u in tqftpserv pd-mapper diag-router rmtfs modem-uim-init usb-net-debug zram
     ln -sf "/etc/systemd/system/$u.service" "$MNT/etc/systemd/system/multi-user.target.wants/$u.service" 2>/dev/null || true
 done
 
-echo "==> installing ALSA UCM2 profile and audio module list"
+echo "==> installing ALSA UCM2 profile, WirePlumber format rule, and audio module list"
 install -Dm644 "$REPO/userspace/audio/ucm2/conf.d/sdm660/sdm660.conf" \
     "$MNT/usr/share/alsa/ucm2/conf.d/sdm660/sdm660.conf"
 install -Dm644 "$REPO/userspace/audio/ucm2/conf.d/sdm660/Xiaomi Redmi Note 7.conf" \
     "$MNT/usr/share/alsa/ucm2/conf.d/sdm660/Xiaomi Redmi Note 7.conf"
 install -Dm644 "$REPO/userspace/audio/ucm2/Qualcomm/lavender/HiFi.conf" \
     "$MNT/usr/share/alsa/ucm2/Qualcomm/lavender/HiFi.conf"
+# PipeWire picks S24_LE for the front end, but the machine driver fixes the
+# Primary MI2S backend at S16_LE; the DSP then passes only the low 16 bits to
+# the amp and playback is ~48 dB quiet.  Force the speaker sink to S16LE.
+install -Dm644 "$REPO/userspace/audio/wireplumber/wireplumber.conf.d/50-lavender-s16.conf" \
+    "$MNT/etc/wireplumber/wireplumber.conf.d/50-lavender-s16.conf"
 install -Dm644 "$REPO/userspace/audio/modules-load.d/sdm660-audio.conf" \
     "$MNT/etc/modules-load.d/sdm660-audio.conf"
+
+# The captured image carries an asound.state with the old over-amplified
+# Digital Volume (127 = +15.75 dB), which alsa-restore would put back at boot.
+# Drop it: without a saved state the driver init values (the vendor defaults
+# used by the UCM) stay in place, and the UCM re-applies them per stream.
+rm -f "$MNT/var/lib/alsa/asound.state"
 
 # The patched ModemManager lives in /usr/local/lib/patched so the pacman hook
 # can restore it after a package upgrade.  Install it right away too.
@@ -231,6 +242,13 @@ fi
 # SSH over USB/WiFi is unaffected.
 echo "==> installing Phosh session and enabling graphical target"
 install -Dm644 "$REPO/userspace/gui/systemd/phosh.service" "$MNT/etc/systemd/system/phosh.service"
+install -Dm755 "$REPO/userspace/gui/bin/lavender-session-defaults" \
+    "$MNT/usr/local/bin/lavender-session-defaults"
+# s2idle is broken on this kernel and every failed cycle re-registers the
+# sound card.  Refuse suspend requests at the systemd level as a backstop;
+# the Phosh session script turns the GNOME/Phosh timers off as well.
+install -Dm644 "$REPO/userspace/base/sleep.conf.d/10-lavender.conf" \
+    "$MNT/etc/systemd/sleep.conf.d/10-lavender.conf"
 mkdir -p "$MNT/etc/systemd/system/graphical.target.wants"
 ln -sf /etc/systemd/system/phosh.service \
        "$MNT/etc/systemd/system/graphical.target.wants/phosh.service"

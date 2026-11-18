@@ -147,6 +147,41 @@ else
     warn "mmcli not installed"
 fi
 
+echo "== audio =="
+if [ -f /usr/share/alsa/ucm2/Qualcomm/lavender/HiFi.conf ]; then
+    ok "lavender UCM2 profile installed"
+else
+    fail "lavender UCM2 profile missing"
+fi
+if [ -f /etc/wireplumber/wireplumber.conf.d/50-lavender-s16.conf ]; then
+    ok "WirePlumber speaker S16LE rule installed"
+else
+    warn "WirePlumber speaker S16LE rule missing (speaker runs ~48 dB quiet)"
+fi
+state=$(systemctl is-active rtkit-daemon 2>/dev/null || true)
+[ "$state" = "active" ] && ok "rtkit-daemon: active" \
+    || warn "rtkit-daemon: ${state:-unknown} (PipeWire runs without realtime priority)"
+if [ -f /etc/systemd/sleep.conf.d/10-lavender.conf ] &&
+   grep -q '^AllowSuspend=no' /etc/systemd/sleep.conf.d/10-lavender.conf; then
+    ok "automatic suspend disabled (s2idle is broken)"
+else
+    warn "suspend is not disabled; a failed resume can take down audio"
+fi
+if command -v amixer >/dev/null 2>&1 && amixer -c 0 info >/dev/null 2>&1; then
+    dv=$(amixer -c 0 cget name='Digital Volume' 2>/dev/null | sed -n 's/.*: values=//p')
+    sv=$(amixer -c 0 cget name='Speaker Volume' 2>/dev/null | sed -n 's/.*: values=//p')
+    dsp=$(amixer -c 0 cget name='Amp DSP Switch' 2>/dev/null | sed -n 's/.*: values=//p')
+    [ "$dv" = "56" ] && ok "Digital Volume: 56 (-2 dB)" \
+        || warn "Digital Volume: ${dv:-unknown} (expected 56)"
+    case "$sv" in
+        5) ok "Speaker Volume: 5 (+18 dB, vendor init)" ;;
+        6) ok "Speaker Volume: 6 (+21 dB, UCM)" ;;
+        *) warn "Speaker Volume: ${sv:-unknown} (expected 5 or 6)" ;;
+    esac
+    [ "$dsp" = "off" ] && ok "Amp DSP Switch: off" \
+        || warn "Amp DSP Switch: ${dsp:-unknown} (expected off)"
+fi
+
 echo
 if [ "$OK" -eq 0 ]; then
     echo "RESULT: core checks passed (warnings: $WARN)"

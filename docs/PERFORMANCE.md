@@ -80,6 +80,12 @@ idle, no measurable cost) because Firefox alone reaches ~1.6 GB RSS.
 
 ## Speaker loudness
 
+> Historical measurement from an early profile.  These runs used `Digital
+> Volume` 100-127; the shipped profile keeps the vendor value 56 (-2 dB),
+> because 127 is +15.75 dB of digital gain and clips full-scale audio.  The
+> real loudness fix is the WirePlumber `S16LE` speaker rule; see
+> [TROUBLESHOOTING.md](TROUBLESHOOTING.md#speaker-is-clean-but-extremely-quiet-in-apps).
+
 1 kHz tone, built-in mic 5 cm from the speaker, 3 repetitions per level,
 `Speaker Volume=6`, ADC1 `8`, amp gain 800:
 
@@ -87,16 +93,19 @@ idle, no measurable cost) because Firefox alone reaches ~1.6 GB RSS.
 | --- | --- | --- | --- |
 | 100 (old default) | 4276.7 | — | 6478 |
 | 112 | 5844.7 | +2.71 dB | 8810 |
-| 127 (new default) | 8394.4 | **+5.86 dB** | 12617 |
+| 127 (old profile) | 8394.4 | **+5.86 dB** | 12617 |
 
-The microphone never clipped, so 127 (the maximum) is used. `Speaker Volume`
-cannot go above 6: the vendor codec only defines even gain codes 0/2/4/6.
+The microphone never clipped, but 127 was later removed: it is +15.75 dB of
+digital gain and clips full-scale audio.  The shipped profile uses 56.
+`Speaker Volume` cannot go above 6: the vendor codec only defines even gain
+codes 0/2/4/6.
 
 ## Final configuration and 3× retest
 
 Locked defaults: `GSK_RENDERER=ngl`, `FD_MESA_DEBUG=noubwc`, zram swap enabled,
-GPU governor `simple_ondemand`, `Digital Volume=127`, speaker amp enabled by the
-MAX98937 driver + UCM2 profile.
+GPU governor `simple_ondemand`, `Digital Volume=56`, `Speaker Volume=6`, the
+WirePlumber `S16LE` speaker rule, and the speaker amp enabled by the MAX98937
+driver + UCM2 profile.
 
 | Scenario | Run 1 | Run 2 | Run 3 | Notes |
 | --- | --- | --- | --- | --- |

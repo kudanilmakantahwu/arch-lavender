@@ -174,6 +174,8 @@ The script:
   Adreno 512 2D-blit fix; if no library is available it warns and keeps the
   distro Mesa, which still loses glyph/texture uploads (see
   [`userspace/mesa/README.md`](../userspace/mesa/README.md)),
+- installs the audio UCM2 profile and the WirePlumber `S16LE` speaker rule,
+  so the MAX98937 plays at normal loudness instead of ~48 dB down,
 - removes the `maf` build account and stale `fbkeyboard` / `touch-zoom` /
   patched-wlroots leftovers, so only `root` and `alarm` can log in,
 - installs and enables Phosh, `seatd`, `systemd-networkd`, `NetworkManager`,
@@ -448,8 +450,13 @@ ssh root@172.16.42.1 'sh /root/verify.sh'
 ```
 
 It checks the kernel, root filesystem, module tree, services, network, clock,
-and modem, and prints a `RESULT:` line. Warnings are normal on a fresh
+audio, and modem, and prints a `RESULT:` line. Warnings are normal on a fresh
 install (for example, "WiFi not configured"). Failures are not.
+
+The audio check expects the UCM2 profile and the WirePlumber speaker rule.
+After playback, `/proc/asound/card0/pcm0p/sub0/hw_params` should report
+`format: S16_LE`; `S24_LE` means the rule is missing and the speaker will be
+about 48 dB too quiet.
 
 ## 12. Modem, SIM and SMS
 

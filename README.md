@@ -29,7 +29,7 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **GPU (Adreno 512, a5xx)** | Partial | 7.2.3 includes the upstream a5xx fixes |
 | **Charging & Battery** | Working | Standard charging and battery reporting work |
 | **Offline Charging** | Broken | System does not boot into offline charging mode |
-| **Microphone, Speaker, Earpiece** | Working | UCM2 profile included; MAX98937 speaker amp driver |
+| **Microphone, Speaker, Earpiece** | Working | UCM2 profile + WirePlumber `S16LE` speaker rule; MAX98937 speaker amp driver |
 | **Modem & SIM Detection** | Working | SIM **must** be placed in Slot 1 |
 | **LTE Registration** | Working | Network registration succeeds |
 | **SMS** | Working | Via ModemManager / `mmcli` |
@@ -53,6 +53,11 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 For detailed version history and logs, see [`docs/STATUS.md`](docs/STATUS.md);
 for the renderer/memory/governor A/B measurements and the final tuned
 defaults, see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
+
+The speaker path needs the shipped WirePlumber rule that forces the ALSA sink
+to 16-bit. Without it PipeWire feeds a 24-bit front end to the 16-bit MAX98937
+backend and apps play clean audio about 48 dB too quiet; see
+[Speaker is clean but extremely quiet in apps](docs/TROUBLESHOOTING.md#speaker-is-clean-but-extremely-quiet-in-apps).
 
 ---
 

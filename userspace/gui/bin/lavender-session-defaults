@@ -1,0 +1,22 @@
+#!/bin/sh
+# lavender-session-defaults: keep automatic suspend off.
+#
+# s2idle does not complete on this kernel.  A suspend attempt logs
+#   WARNING: drivers/clk/qcom/clk-branch.c:88 at clk_branch_toggle
+# and one cycle took ~16 minutes to resume, while a later one hard-locked
+# CPU5 in systemd-sleep.  Every failed cycle also removes and re-registers the
+# sound card, which makes audio disappear and lets WirePlumber restore a
+# stale, muted route.
+#
+# The system-wide backstop is /etc/systemd/sleep.conf.d/10-lavender.conf
+# (AllowSuspend=no).  These are the GNOME/Phosh knobs so the UI does not keep
+# trying.  phosh.service runs this as alarm with the user session bus in
+# DBUS_SESSION_BUS_ADDRESS.
+set -u
+
+p=org.gnome.settings-daemon.plugins.power
+gsettings set "$p" sleep-inactive-ac-timeout 0 2>/dev/null || true
+gsettings set "$p" sleep-inactive-battery-timeout 0 2>/dev/null || true
+gsettings set "$p" sleep-inactive-ac-type nothing 2>/dev/null || true
+gsettings set "$p" sleep-inactive-battery-type nothing 2>/dev/null || true
+gsettings set sm.puri.phosh enable-suspend false 2>/dev/null || true

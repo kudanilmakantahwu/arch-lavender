@@ -38,7 +38,7 @@ broken or untested, and is described in the sections below.
 | Offline Charging | Broken | System does not boot into offline charging mode |
 | Audio – Earpiece | Working | PM660L (PM8916-compatible) analog codec on internal MI2S |
 | Audio – Microphone | Working | PM660L ADC1, routed through the shipped UCM2 profile |
-| Audio – Speaker | Working | MAX98937 smart amp on Primary MI2S (`max98937` driver) |
+| Audio – Speaker | Working | MAX98937 smart amp on Primary MI2S (`max98937` driver); speaker sink forced to `S16LE` |
 | Modem & SIM Detection | Working | SIM **must** be in slot 1 |
 | LTE Registration | Working | Network registration succeeds |
 | SMS | Working | Via ModemManager / `mmcli` |
@@ -146,6 +146,12 @@ Speaker, earpiece and microphone all work:
   PipeWire/WirePlumber the `Speaker playback` sink and `Internal microphone`
   source.  Without it PipeWire falls back to a broken profile and logs
   `no backend DAIs enabled for MultiMedia1`.
+- `userspace/audio/wireplumber` forces the speaker sink to `S16LE`.  PipeWire
+  otherwise opens the `MultiMedia1` front end at `S24_LE` while the machine
+  driver fixes Primary MI2S at `S16_LE`; the Q6 DSP then behaves as if only
+  the low 16 bits reach the MAX98937, so playback is clean but ~48 dB too
+  quiet.  The rule covers every client on the speaker sink, including
+  Waydroid, and leaves the headphone and microphone formats alone.
 
 In-call audio is a separate problem; see "Phone call audio" above.
 

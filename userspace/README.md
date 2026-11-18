@@ -1,15 +1,15 @@
 # userspace
 
-`rootfs/build-rootfs.sh` installs the units, scripts, and audio profile from
-this directory into the root filesystem. `mesa/` is different: it holds
-source-build inputs and is not copied as-is; the built `libgallium` is what
-gets installed.
+`rootfs/build-rootfs.sh` installs the units, scripts, audio profile, and power
+policy from this directory into the root filesystem. `mesa/` is different: it
+holds source-build inputs and is not copied as-is; the built `libgallium` is
+what gets installed.
 
 | Directory | Contents |
 | --- | --- |
-| `base/` | Qualcomm modem/DIAG services, the UIM init script, USB networking debug fallback, zram, and the ModemManager "no net port" patch. |
-| `audio/` | ALSA UCM2 profile for the SDM660 sound card (speaker + microphone routing) and the audio `modules-load.d` list. |
-| `gui/` | The Phosh systemd unit used by the default graphical session. |
+| `base/` | Qualcomm modem/DIAG services, the UIM init script, USB networking debug fallback, zram, the ModemManager "no net port" patch, and the `sleep.conf.d` drop-in that refuses suspend (s2idle is broken on this kernel). |
+| `audio/` | ALSA UCM2 profile for the SDM660 sound card (speaker + microphone routing), the WirePlumber rule that keeps the speaker at 16-bit, and the audio `modules-load.d` list. |
+| `gui/` | The Phosh systemd unit and `lavender-session-defaults`, which disables the GNOME/Phosh idle-suspend timers at session start. |
 | `mesa/` | The a5xx/FD512 2D-blit fix: prebuilt `libgallium`, rebased Mesa backport, `build-libgallium.sh`, and ABI notes. |
 
 ## base
@@ -93,12 +93,22 @@ rollback, and evidence. This is a userspace fix; the kernel is not patched.
 | `conf.d/sdm660/Xiaomi Redmi Note 7.conf` | Card entry, matched on the ASoC driver name (`sdm660`) and long name |
 | `conf.d/sdm660/sdm660.conf` | Same, matched on the driver name alone |
 | `Qualcomm/lavender/HiFi.conf` | `HiFi` verb with `Speaker` and `Mic` devices |
+| `wireplumber/wireplumber.conf.d/50-lavender-s16.conf` | Forces the speaker sink to open the ALSA PCM at `S16LE` |
 
 The `Speaker` device routes `MultiMedia1` to Primary MI2S
 (`PRI_MI2S_RX Audio Mixer MultiMedia1`) and sets the MAX98937 gains; the `Mic`
 device routes `MultiMedia2` to LPI MI2S TX3 and sets `ADC1 Volume`.  Without
 this profile PipeWire uses a fallback profile and playback fails with
 `ASoC: no backend DAIs enabled for MultiMedia1`.
+
+`50-lavender-s16.conf` is not cosmetic.  PipeWire otherwise opens the
+`MultiMedia1` front end at `S24_LE`, while the machine driver fixes the
+Primary MI2S backend at `S16_LE`; the Q6 DSP then passes only the low 16 bits
+of every sample to the MAX98937.  That produces clean audio about 48 dB too
+quiet, independent of the ALSA and PipeWire volumes.  The rule matches the
+speaker sink by name and sets `audio.format = "S16LE"`, which covers every
+client on that sink, including Waydroid.  Headphone and microphone formats
+are untouched.
 
 `audio/modules-load.d/sdm660-audio.conf` loads the audio modules early so the
 card exists before PipeWire starts.
