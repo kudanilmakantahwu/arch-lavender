@@ -407,6 +407,27 @@ Restore the default UI later with `systemctl set-default graphical.target` and
 
 ## WiFi
 
+### No password prompt when selecting a new network
+
+Phosh's NetworkManager agent checks the keyring before it creates the
+authentication dialog. Without a Secret Service provider the lookup fails and
+the dialog is never shown; NetworkManager then reports that no secrets were
+provided.
+
+Make sure `gnome-keyring` is installed and `org.freedesktop.secrets` is
+activatable:
+
+```sh
+pacman -Q gnome-keyring
+sudo pacman -S --needed gnome-keyring
+busctl --user list | grep org.freedesktop.secrets
+secret-tool search test test
+```
+
+`secret-tool` should not print `The name is not activatable`. After installing
+gnome-keyring, try the network again; no phosh or NetworkManager configuration
+change is needed. The user socket is enabled by the package.
+
 ### WiFi interface missing
 
 ```sh

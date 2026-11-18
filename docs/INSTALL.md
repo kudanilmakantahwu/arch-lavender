@@ -543,7 +543,7 @@ Waydroid support). Everything below exists in the `core`, `extra`, `alarm`, or
 
 ```sh
 sudo pacman -Syu
-sudo pacman -S --needed phosh phoc squeekboard phosh-mobile-settings phosh-tour xdg-desktop-portal-phosh gnome-session gnome-shell pipewire-pulse wireplumber wpa_supplicant networkmanager modemmanager nano vim firefox waydroid gnome-calendar gnome-console gnome-weather gnome-text-editor noto-fonts-emoji ttf-droid nautilus chatty gnome-software gst-libav gnome-contacts gvfs gvfs-mtp gvfs-gphoto2 gvfs-afc gvfs-smb gvfs-nfs gvfs-goa gvfs-dnssd gnome-calculator gnome-user-share showtime decibels gst-plugins-bad gst-plugins-good gst-plugin-dav1d rygel flatpak snapshot tuned-ppd tuned gnome-clocks gnome-maps loupe papers fprintd
+sudo pacman -S --needed phosh phoc squeekboard phosh-mobile-settings phosh-tour xdg-desktop-portal-phosh gnome-session gnome-shell pipewire-pulse wireplumber wpa_supplicant networkmanager gnome-keyring modemmanager nano vim firefox waydroid gnome-calendar gnome-console gnome-weather gnome-text-editor noto-fonts-emoji ttf-droid nautilus chatty gnome-software gst-libav gnome-contacts gvfs gvfs-mtp gvfs-gphoto2 gvfs-afc gvfs-smb gvfs-nfs gvfs-goa gvfs-dnssd gnome-calculator gnome-user-share showtime decibels gst-plugins-bad gst-plugins-good gst-plugin-dav1d rygel flatpak snapshot tuned-ppd tuned gnome-clocks gnome-maps loupe papers fprintd
 ```
 
 These are **not** in the ALARM repositories and need AUR or an alternative:

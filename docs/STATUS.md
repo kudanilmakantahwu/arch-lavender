@@ -21,6 +21,7 @@ Package versions from the tested image:
 | `phoc` | `0.57.0-2` |
 | `squeekboard` | `1.43.1-6` |
 | `chatty` | `0.8.9-9` |
+| `gnome-keyring` | `1:51.1-1` (needed for Wi-Fi password prompts) |
 
 ## Feature matrix
 
