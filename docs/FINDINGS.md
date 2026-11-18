@@ -195,7 +195,7 @@ Driver: `/home/maf/lavender-lab/glatlasvis.c` (visual variant of `glatlas2`;
 
 ### A8. ABI-matched system-wide build
 
-The first session-wide attempt failed because two ABI details were wrong, not
+The first session-wide attempts failed because of three build/ABI details, not
 because of the patch:
 
 - Arch's `libEGL_mesa.so.0.0.0` has `NEEDED libgallium-26.2.6-arch1.1.so`.
@@ -207,13 +207,23 @@ because of the patch:
   symbols. Reconfiguring with `-Dplatforms=wayland,x11` and rebuilding fixed it:
   18 `loader_dri3_*` symbols are exported, and `ldd -r` reports zero undefined
   symbols against both `libEGL_mesa.so.0` and `dri/msm_dri.so`.
+- The first ABI-matched build still had `opengl=false` in `meson configure`, so
+  it exposed only OpenGL ES. That was not visible in the phosh/GSK/Firefox
+  tests, but Qt apps need desktop GL: Angelfish aborted in
+  `QSGRenderLoop::handleContextCreationFailure` with
+  `Failed to initialize graphics backend for OpenGL`. `eglinfo` confirmed the
+  missing `OpenGL core profile` section. Reconfiguring with `-Dopengl=true`
+  restored `OpenGL core profile version: 3.1 Mesa 26.2.6-arch1.1` and Angelfish
+  renders normally. This is a build-configuration issue, not a regression from
+  the blit patches: the pristine Arch lib also provides desktop GL, and a lib
+  built without it is not a drop-in replacement for Qt apps.
 
 Commands on the phone:
 
 ```
 cd /root/mesa-26.2.6
 VERSION=26.2.6-arch1.1 PYTHONPATH=/root/lab/pystub \
-  meson setup --reconfigure build -Dplatforms=wayland,x11
+  meson setup --reconfigure build -Dplatforms=wayland,x11 -Dopengl=true
 ninja -C build src/gallium/targets/dri/libgallium-26.2.6-arch1.1.so
 cp build/src/gallium/targets/dri/libgallium-26.2.6-arch1.1.so \
    /usr/lib/libgallium-26.2.6-arch1.1.so
@@ -223,14 +233,17 @@ cp build/src/gallium/targets/dri/libgallium-26.2.6-arch1.1.so \
 regenerate step without `PYTHONPATH`, and the run then fails at the PyYAML
 probe even though `/root/lab/pystub/yaml.py` exists.
 
-Installed file (2026-11-18): `/usr/lib/libgallium-26.2.6-arch1.1.so`,
-sha256 `3f9a7e7da3f13ebff4f21b199e308cd5a34a02c96e680c885788df13787cb388`.
+Installed file (2026-11-18, after the desktop-GL rebuild):
+`/usr/lib/libgallium-26.2.6-arch1.1.so`,
+sha256 `2e66f90e955f745a98c8fa180e83a4f912f0873e48898d42f325a9200a47808c`.
 Pristine Arch backup: `/root/lab/backup/libgallium-26.2.6-arch1.1.so.system`,
 sha256 `34bb5b1b0eb80f86fab45a4485eddb9f60b283f2ed45309d1fc4ac4f235a411d`.
+The intermediate GLES-only build is kept as
+`/root/lab/backup/libgallium-26.2.6-arch1.1.so.glesonly`.
 The `/opt` drop-in `zz-mesa-hbb.conf` was removed; only the pre-existing
 `mesa-noubwc.conf` (`FD_MESA_DEBUG=noubwc`) remains. phoc maps the system
-libgallium. This is a lab-only build (freedreno only, `llvm=disabled`, glvnd
-disabled, no swrast/zink); do not ship it as a general Mesa replacement.
+libgallium. This is still a lab-only build (freedreno only, `llvm=disabled`,
+glvnd disabled, no swrast/zink); do not ship it as a general Mesa replacement.
 
 ### A9. System-wide validation
 
@@ -239,6 +252,8 @@ All runs below use the installed system-wide library, no `/opt` or
 
 - `glatlas2` 3x50 (150 cycles): 150/150 clean, renderer FD512.
   Logs: `/root/lab/logs/glatlas2-sys-{1,2,3}.log`.
+- After the `-Dopengl=true` rebuild, `glatlas2` was repeated 3x50: 150/150 clean,
+  renderer FD512. Logs: `/root/lab/logs/glatlas2-gl-{1,2,3}.log`.
 - `glatlasvis` without env: readback clean and the captured frame shows the
   gradient tile, not the black tile. Screenshot:
   `/home/maf/lavender-lab/shots/glatlasvis-sys.png`.
@@ -247,16 +262,29 @@ All runs below use the installed system-wide library, no `/opt` or
   `OpenGL ES 3.1 Mesa 26.2.6-arch1.1`, GPU #1 `FD512` active.
   Screenshots: `shots/firefox-support7.png`, `shots/firefox-support8.png`.
 - `glmark2-es2-wayland -b texture:duration=10`: 202 fps, clean wood-texture
-  frame (`shots/glmark2-tex.png`). `--validate` reports 24 failures on the
+  frame (`shots/glmark2-tex.png`); the rebuilt lib gives 199 fps with the same
+  clean frame (`shots/glmark2-gl.png`). `--validate` reports 24 failures on the
   patched lib and the exact same 24 failures with the pristine Arch lib, so
   that validation mode is not a usable correctness signal on this stack.
 - `gskstress` (400 GSK glyph-atlas frames) and `gskimg` (300 GtkImage churn
   frames) render their final frames complete:
   `shots/gskstress-sys.png`, `shots/gskimg-sys.png`.
-- The new phoc stays up. The only core dump is the old phoc PID 8435
-  (`SIGSEGV`) at the moment of the forced `systemctl restart phosh`; the new
-  PID 16432 starts cleanly and maps the system libgallium. Treat that teardown
-  crash as the known phoc cleanup issue, separate from rendering.
+- Angelfish (QtWebEngine) loads `https://example.com` with the rebuilt lib and
+  maps `/usr/lib/libgallium-26.2.6-arch1.1.so`: `shots/angelfish-gl2.png`.
+  It fails to start on the GLES-only build, which is why desktop GL is enabled.
+  The same page also renders with the pristine Arch lib
+  (`shots/angelfish-base2.png`), so the patch is not required for Qt, it just
+  must not remove desktop GL.
+- Epiphany does not work on this setup: `WebKitWebProcess` aborts (`SIGABRT`)
+  inside `libephywebprocessextension.so` during web-process extension init.
+  This reproduces with `WEBKIT_DISABLE_DMABUF_RENDERER=1` under both the
+  patched `shots/epiphany-now.png` and the pristine Arch lib
+  `shots/epiphany-base.png`, so it is a WebKit/Epiphany issue on this image,
+  not a Mesa blit regression.
+- The current phoc stays up and maps the rebuilt lib. The old phoc PID 8435
+  (`SIGSEGV`) dumped during the forced `systemctl restart phosh`; the new
+  phoc (PID 26908 after the rebuild) starts cleanly. Treat that teardown crash
+  as the known phoc cleanup issue, separate from rendering.
 - Waydroid container/session start, but `waydroid show-full-ui` loops on
   `Failed to get service waydroidplatform`; Android UI does not come up. This is
   a Waydroid/binder issue on the current setup, not a Mesa rendering result.
@@ -266,8 +294,11 @@ All runs below use the installed system-wide library, no `/opt` or
 - Keep the system-wide lib only as a lab override; an Arch `mesa` upgrade will
   overwrite it. For distribution, carry the three patches in a Mesa PKGBUILD
   until 26.3.
-- Re-test Epiphany (`WEBKIT_DISABLE_DMABUF_RENDERER=1`) and Angelfish under the
-  system-wide lib, and use a browser on a real site for a longer uptime run.
+- Use a browser on a real site for a longer uptime run (hours); the 3x50
+  reproducer and the short app checks are done.
+- Epiphany is broken independently of Mesa: `WebKitWebProcess` aborts in the
+  Epiphany web-process extension. Debug the WebKit/Epiphany packaging on this
+  image separately; Angelfish and Firefox are the working browsers.
 - Fix/decide Waydroid separately (binder/platform service); it is not blocked
   by the glyph fix.
 - Verify squeekboard and the lock screen after a clean reboot (session restart
