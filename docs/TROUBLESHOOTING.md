@@ -531,6 +531,31 @@ amixer -c 0 cget name='Amp DSP Switch'   # must be off
 Turning it on by hand can leave the amp enabled but silent; the UCM keeps it
 off, matching the driver's init sequence.
 
+### Speaker sink is missing (only "Dummy Output")
+
+Check that the kernel bound the machine driver:
+
+```sh
+ls /proc/asound/cards          # must list "Xiaomi Redmi Note 7"
+lsmod | grep sm8250            # snd_soc_sm8250 must be loaded
+```
+
+If the card list is empty, the kernel was built with
+`# CONFIG_SND_SOC_SM8250 is not set`.  That option must be `=m`; the card
+cannot appear without it, and no userspace rule can fix it.
+
+If the card is present but `wpctl status` only shows `Dummy Output`, the UCM
+verb failed to activate.  PipeWire's ACP probes every device in the verb; a
+capture device that cannot be opened makes the whole profile unsupported.  The
+shipped profile keeps `Mic` in a separate verb so this cannot disable the
+speaker.  Verify the files and restart the session manager:
+
+```sh
+ls /usr/share/alsa/ucm2/Qualcomm/lavender/{HiFi,Mic}.conf
+systemctl --user restart wireplumber
+wpctl status | sed -n '/Sinks:/,/Sources:/p'
+```
+
 ### Speaker is clean but extremely quiet in apps
 
 Symptom: the speaker works, the audio is clean, but even at 100% it is only

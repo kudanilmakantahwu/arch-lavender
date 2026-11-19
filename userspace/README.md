@@ -92,12 +92,13 @@ rollback, and evidence. This is a userspace fix; the kernel is not patched.
 | --- | --- |
 | `conf.d/sdm660/Xiaomi Redmi Note 7.conf` | Card entry, matched on the ASoC driver name (`sdm660`) and long name |
 | `conf.d/sdm660/sdm660.conf` | Same, matched on the driver name alone |
-| `Qualcomm/lavender/HiFi.conf` | `HiFi` verb with `Speaker` and `Mic` devices |
+| `Qualcomm/lavender/HiFi.conf` | `HiFi` verb with the `Speaker` device |
+| `Qualcomm/lavender/Mic.conf` | Separate `Mic` verb (ACP capture probe fails on 7.2.3; keeping it out of HiFi preserves the speaker profile) |
 | `wireplumber/wireplumber.conf.d/50-lavender-s16.conf` | Forces the speaker sink to open the ALSA PCM at `S16LE` |
 
 The `Speaker` device routes `MultiMedia1` to Primary MI2S
 (`PRI_MI2S_RX Audio Mixer MultiMedia1`) and sets the MAX98937 gains; the `Mic`
-device routes `MultiMedia2` to LPI MI2S TX3 and sets `ADC1 Volume`.  Without
+verb routes `MultiMedia2` to LPI MI2S TX3 and sets `ADC1 Volume`.  Without
 this profile PipeWire uses a fallback profile and playback fails with
 `ASoC: no backend DAIs enabled for MultiMedia1`.
 

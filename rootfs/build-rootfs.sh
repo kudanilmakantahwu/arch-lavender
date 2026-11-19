@@ -218,6 +218,8 @@ install -Dm644 "$REPO/userspace/audio/ucm2/conf.d/sdm660/Xiaomi Redmi Note 7.con
     "$MNT/usr/share/alsa/ucm2/conf.d/sdm660/Xiaomi Redmi Note 7.conf"
 install -Dm644 "$REPO/userspace/audio/ucm2/Qualcomm/lavender/HiFi.conf" \
     "$MNT/usr/share/alsa/ucm2/Qualcomm/lavender/HiFi.conf"
+install -Dm644 "$REPO/userspace/audio/ucm2/Qualcomm/lavender/Mic.conf" \
+    "$MNT/usr/share/alsa/ucm2/Qualcomm/lavender/Mic.conf"
 # PipeWire picks S24_LE for the front end, but the machine driver fixes the
 # Primary MI2S backend at S16_LE; the DSP then passes only the low 16 bits to
 # the amp and playback is ~48 dB quiet.  Force the speaker sink to S16LE.

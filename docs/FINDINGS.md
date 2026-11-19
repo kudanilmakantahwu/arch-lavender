@@ -404,3 +404,22 @@ Do not raise `Digital Volume` to compensate: it cannot restore the truncated
 low bits and only adds clipping gain.  A true 24-bit path would need the BE
 format, BCLK ratio, and MAX98937 PCM mode changed together; 16-bit matches
 the vendor configuration and the amp's init sequence.
+
+The kernel must also build the machine driver.  The repo config had
+`# CONFIG_SND_SOC_SM8250 is not set`, so the card never bound and
+`/proc/asound/cards` stayed empty even with the WirePlumber rule installed.
+`CONFIG_SND_SOC_SM8250=m` is now enabled; it is required for any speaker fix
+on this tree.
+
+Hardware re-validation (7.2.3, 2026-11-19, kernel without a kernel-side
+format quirk): with only the repo WirePlumber rule, Firefox playback opened
+`hw:0,0` at `S16_LE`, 48 kHz, 2 channels (`state: RUNNING`) and the speaker
+was loud and clean at 100%.  The rule alone is sufficient once the card is
+present.
+
+One UCM detail matters: ACP probes every device in a verb.  On 7.2.3 the
+`MultiMedia2` capture PCM (`hw:X7,1`) fails to open with `EINVAL`, which made
+the whole `HiFi` profile unsupported and left only `Dummy Output`.  The
+microphone therefore lives in its own `Mic` verb (`Mic.conf`); the speaker
+`HiFi` verb contains only the `Speaker` device and remains usable even when
+capture cannot be probed.

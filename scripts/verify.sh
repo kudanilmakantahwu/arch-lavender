@@ -148,10 +148,21 @@ else
 fi
 
 echo "== audio =="
-if [ -f /usr/share/alsa/ucm2/Qualcomm/lavender/HiFi.conf ]; then
+if [ -f /usr/share/alsa/ucm2/Qualcomm/lavender/HiFi.conf ] &&
+   [ -f /usr/share/alsa/ucm2/Qualcomm/lavender/Mic.conf ]; then
     ok "lavender UCM2 profile installed"
 else
     fail "lavender UCM2 profile missing"
+fi
+if [ -r /proc/asound/card0/id ]; then
+    ok "sound card present: $(cat /proc/asound/card0/id)"
+else
+    fail "no sound card (kernel needs CONFIG_SND_SOC_SM8250=m)"
+fi
+if grep -q '^snd_soc_sm8250 ' /proc/modules 2>/dev/null; then
+    ok "snd_soc_sm8250 loaded"
+else
+    warn "snd_soc_sm8250 not loaded (speaker will not work)"
 fi
 if [ -f /etc/wireplumber/wireplumber.conf.d/50-lavender-s16.conf ]; then
     ok "WirePlumber speaker S16LE rule installed"

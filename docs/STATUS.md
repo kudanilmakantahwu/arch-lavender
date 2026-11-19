@@ -37,8 +37,8 @@ broken or untested, and is described in the sections below.
 | Charging & Battery | Working | Standard charging and battery reporting work |
 | Offline Charging | Broken | System does not boot into offline charging mode |
 | Audio – Earpiece | Working | PM660L (PM8916-compatible) analog codec on internal MI2S |
-| Audio – Microphone | Working | PM660L ADC1, routed through the shipped UCM2 profile |
-| Audio – Speaker | Working | MAX98937 smart amp on Primary MI2S (`max98937` driver); speaker sink forced to `S16LE` |
+| Audio – Microphone | Partial | PM660L ADC1 in a separate UCM verb; `hw:X7,1` capture open currently fails with `EINVAL` on 7.2.3 |
+| Audio – Speaker | Working | MAX98937 smart amp on Primary MI2S (`max98937` driver); needs `CONFIG_SND_SOC_SM8250=m`; sink forced to `S16LE` |
 | Modem & SIM Detection | Working | SIM **must** be in slot 1 |
 | LTE Registration | Working | Network registration succeeds |
 | SMS | Working | Via ModemManager / `mmcli` |
@@ -132,7 +132,8 @@ fingerprint path in this kernel/rootfs combination.
 
 ### Audio
 
-Speaker, earpiece and microphone all work:
+Speaker and earpiece work; the microphone path is exposed separately and
+currently fails to open (see below):
 
 - The main speaker is driven by a **MAX98937** smart amplifier on Primary
   MI2S.  It shares the MAX98927 bit layouts but has a different register
@@ -144,9 +145,12 @@ Speaker, earpiece and microphone all work:
 - The earpiece and internal microphone are handled by the PM660L
   (PM8916-compatible) analog codec on internal/LPI MI2S.
 - `userspace/audio/ucm2` installs an ALSA UCM2 profile that gives
-  PipeWire/WirePlumber the `Speaker playback` sink and `Internal microphone`
-  source.  Without it PipeWire falls back to a broken profile and logs
-  `no backend DAIs enabled for MultiMedia1`.
+  PipeWire/WirePlumber the `Speaker playback` sink.  Without it PipeWire
+  falls back to a broken profile and logs `no backend DAIs enabled for
+  MultiMedia1`.  The microphone is in a separate `Mic` verb: ACP probes every
+  device in a verb, and `hw:X7,1` currently fails to open with `EINVAL`, which
+  would otherwise mark the whole HiFi profile unsupported and leave only
+  `Dummy Output`.
 - `userspace/audio/wireplumber` forces the speaker sink to `S16LE`.  PipeWire
   otherwise opens the `MultiMedia1` front end at `S24_LE` while the machine
   driver fixes Primary MI2S at `S16_LE`; the Q6 DSP then behaves as if only
