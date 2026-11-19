@@ -183,7 +183,7 @@ release manually.
 From the Actions tab, run **kernel** with:
 
 ```
-tag: v1.1
+tag: v1.2
 ```
 
 The workflow creates the release if it does not exist and uploads the three

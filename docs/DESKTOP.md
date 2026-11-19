@@ -306,7 +306,7 @@ set, `ExecStart` and the `XDG_*` names differ:
 
 | Session | Install | `ExecStart` | `XDG_CURRENT_DESKTOP` |
 | --- | --- | --- | --- |
-| Phosh (default) | `phosh phoc squeekboard` | `/usr/bin/phosh-session` | `Phosh:GNOME` |
+| Phosh (default) | `phosh phoc stevia` | `/usr/bin/phosh-session` | `Phosh:GNOME` |
 | Plasma Mobile | `plasma-mobile` | `/usr/bin/startplasmamobile` | `KDE` |
 | GNOME | `gnome-shell gnome-session mutter` | `/usr/bin/gnome-session` | `GNOME` |
 | Sway | `sway` | `/usr/bin/sway` | `sway` |
@@ -314,7 +314,7 @@ set, `ExecStart` and the `XDG_*` names differ:
 
 GNOME is considerably heavier than Phosh on this device; Sway and Hyprland
 are lighter but do not provide a mobile shell or an on-screen keyboard by
-default (install `squeekboard` or `wvkbd` if needed). For Sway, keep
+default (install `stevia` or `wvkbd` if needed). For Sway, keep
 `WLR_BACKENDS=drm,libinput` in the unit if you want to pin the backends.
 
 ### X11 (XFCE, i3, ...)

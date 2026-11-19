@@ -19,7 +19,7 @@ Package versions from the tested image:
 | `modemmanager` | `1.24.2-2` (patched, see below) |
 | `phosh` | `0.57.0-2` |
 | `phoc` | `0.57.0-2` |
-| `squeekboard` | `1.43.1-6` |
+| `stevia` | `0.59.0-1` (on-screen keyboard; replaces `squeekboard`) |
 | `chatty` | `0.8.9-9` |
 | `gnome-keyring` | `1:51.1-1` (needed for Wi-Fi password prompts) |
 
@@ -80,7 +80,7 @@ network, and modem path are identical regardless of how the session is used.
 ## Works
 
 - Boot, reboot, and shutdown
-- Phosh desktop on `tty1`, with squeekboard on-screen keyboard
+- Phosh desktop on `tty1`, with the stevia on-screen keyboard
 - Plasma Mobile 6.8.3 on `tty1` (tested 2026-11-19: KWin Wayland, plasmashell and
   the mobile shell start, SSH stays reachable; startup QML warnings are
   non-fatal). See [`DESKTOP.md`](DESKTOP.md)

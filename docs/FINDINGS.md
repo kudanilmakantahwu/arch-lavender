@@ -309,7 +309,7 @@ All runs below use the installed system-wide library, no `/opt` or
   image separately; Angelfish and Firefox are the working browsers.
 - Keep Waydroid optional (occasional font glitches); it is not blocked by the
   glyph fix.
-- Verify squeekboard and the lock screen after a clean reboot (session restart
+- Verify stevia and the lock screen after a clean reboot (session restart
   already keeps them working).
 
 ### A11. Repo build and rootfs install check

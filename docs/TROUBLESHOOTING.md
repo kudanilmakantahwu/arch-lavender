@@ -393,7 +393,7 @@ Common causes:
 - `seatd` is not running: `systemctl status seatd`, `systemctl enable --now seatd`.
 - The session user cannot log in: `passwd -S alarm` must say `P` (password set).
 - The compositor crashed after a GPU hang: reboot and check `dmesg | grep -i a5xx`.
-- On-screen keyboard missing: check `pgrep -x squeekboard`.
+- On-screen keyboard missing: check `pgrep -x phosh-osk-stevia`.
 
 To fall back to a text-only boot:
 
@@ -848,7 +848,11 @@ Phosh is the default UI, not an opt-in experiment. Common symptoms:
   `/proc/device-tree/model` is `Xiaomi Redmi Note 7 (Shenchao)`.
 - The compositor crashes after a GPU hang: reboot and check
   `dmesg | grep -i a5xx`.
-- On-screen keyboard does not appear: `squeekboard` may not be running.
+- On-screen keyboard does not appear: check
+  `systemctl --user status mobi.phosh.OSK`; the provider is
+  `phosh-osk-stevia` (the image no longer ships `squeekboard`).
+- No terminal in the app grid: `foot` is no longer shipped.  The default
+  terminal is GNOME Console (`kgx`); install `foot` yourself if you prefer it.
 
 To go back to a text-only boot:
 

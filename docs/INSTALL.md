@@ -114,7 +114,7 @@ Download the assets from the GitHub release (replace the tag if needed):
 ```sh
 mkdir -p ~/lavender-assets && cd ~/lavender-assets
 
-gh release download v1.1 \
+gh release download v1.2 \
   --repo kudanilmakantahwu/arch-lavender \
   --pattern 'arch-lavender-boot.img' \
   --pattern 'arch-initramfs-fsck.gz' \
@@ -562,7 +562,7 @@ Everything below exists in the `core`, `extra`, `alarm`, or `aur` repositories:
 
 ```sh
 sudo pacman -Syu
-sudo pacman -S --needed phosh phoc squeekboard phosh-mobile-settings phosh-tour xdg-desktop-portal-phosh gnome-session gnome-shell pipewire-pulse wireplumber wpa_supplicant networkmanager gnome-keyring modemmanager nano vim firefox gnome-calendar gnome-console gnome-weather gnome-text-editor noto-fonts-emoji ttf-droid nautilus chatty gnome-software gst-libav gnome-contacts gvfs gvfs-mtp gvfs-gphoto2 gvfs-afc gvfs-smb gvfs-nfs gvfs-goa gvfs-dnssd gnome-calculator gnome-user-share showtime decibels gst-plugins-bad gst-plugins-good gst-plugin-dav1d rygel flatpak snapshot tuned-ppd tuned gnome-clocks gnome-maps loupe papers fprintd
+sudo pacman -S --needed phosh phoc stevia phosh-mobile-settings phosh-tour xdg-desktop-portal-phosh gnome-session gnome-shell pipewire-pulse wireplumber wpa_supplicant networkmanager gnome-keyring modemmanager nano vim firefox gnome-calendar gnome-console gnome-weather gnome-text-editor noto-fonts-emoji ttf-droid nautilus chatty gnome-software gst-libav gnome-contacts gvfs gvfs-mtp gvfs-gphoto2 gvfs-afc gvfs-smb gvfs-nfs gvfs-goa gvfs-dnssd gnome-calculator gnome-user-share showtime decibels gst-plugins-bad gst-plugins-good gst-plugin-dav1d rygel flatpak snapshot tuned-ppd tuned gnome-clocks gnome-maps loupe papers fprintd
 ```
 
 Waydroid is **optional** and is not enabled by the release image. It works on
@@ -678,7 +678,8 @@ to be rebuilt.
 Phosh is the default UI and starts automatically on `tty1` as user `alarm`:
 
 - `phoc` is the Wayland compositor,
-- `squeekboard` provides the on-screen keyboard,
+- `stevia` provides the on-screen keyboard (in the `extra` repository; it
+  replaces `squeekboard`),
 - `seatd` grants the session access to DRM/input devices,
 - `getty@tty2` stays enabled for a USB-keyboard text console; without a USB
   keyboard, use SSH over USB or Wi-Fi as the recovery path.
@@ -694,7 +695,7 @@ Check the session:
 
 ```sh
 systemctl status phosh
-pgrep -af 'phoc|phosh|squeekboard'
+pgrep -af 'phoc|phosh|phosh-osk-stevia'
 tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep GSK_RENDERER
 ```
 

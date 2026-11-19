@@ -128,7 +128,7 @@ Complete walkthroughs for Wi-Fi and modem setup are located in [`docs/INSTALL.md
 ## Graphical session and console fallback
 
 The default install boots to `graphical.target` and starts Phosh on `tty1`
-(phoc + squeekboard, user `alarm`). SSH over USB and WiFi remains enabled.
+(phoc + stevia on-screen keyboard, user `alarm`). SSH over USB and WiFi remains enabled.
 
 The image runs the GL renderer (`GSK_RENDERER=ngl`): text scrolling reaches
 ~50 fps against ~23 fps with cairo on the same 4000-line GTK4 text view.
