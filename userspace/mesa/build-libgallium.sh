@@ -2,14 +2,14 @@
 # Build an ABI-matched patched libgallium for the Adreno 512 (a5xx).
 #
 # Usage:
-#   ./build-libgallium.sh --src /path/to/mesa-26.2.6 [--out FILE] [--check]
-#   sudo ./build-libgallium.sh --src /path/to/mesa-26.2.6 --install
+#   ./build-libgallium.sh --src /path/to/mesa-26.2.7 [--out FILE] [--check]
+#   sudo ./build-libgallium.sh --src /path/to/mesa-26.2.7 --install
 #
-# The source tree must be Mesa 26.2.6. The script applies
+# The source tree must be Mesa 26.2.6 or 26.2.7. The script applies
 # patches/0001-freedreno-a5xx-2d-blit-and-hbb.patch unless it is already
 # applied, builds only src/gallium/targets/dri/libgallium-<ABI>.so, and
 # copies it out. --install also stores it in /usr/local/lib/patched and
-# replaces the system libgallium, then restarts phosh.
+# replaces the system libgallium, then restarts the active desktop session.
 set -eu
 
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -20,13 +20,12 @@ usage() {
 }
 
 # The soname must match what the distro libEGL_mesa links against. Arch
-# currently uses libgallium-26.2.6-arch1.1.so.
+# currently uses libgallium-26.2.7-arch1.1.so (26.2.6 on older images).
 ABI="${ABI_VERSION:-}"
 if [ -z "$ABI" ] && [ -r /usr/lib/libEGL_mesa.so.0 ] && command -v readelf >/dev/null 2>&1; then
     ABI=$(readelf -d /usr/lib/libEGL_mesa.so.0 2>/dev/null |
           sed -n 's/.*\[libgallium-\(.*\)\.so\]/\1/p' | head -n 1)
 fi
-ABI="${ABI:-26.2.6-arch1.1}"
 
 SRC=""
 OUT=""
@@ -44,14 +43,15 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-[ -n "$SRC" ] || { echo "error: --src /path/to/mesa-26.2.6 is required" >&2; exit 2; }
+[ -n "$SRC" ] || { echo "error: --src /path/to/mesa-26.2.6-or-26.2.7 is required" >&2; exit 2; }
 [ -d "$SRC" ] || { echo "error: source tree not found: $SRC" >&2; exit 2; }
 SRC=$(CDPATH= cd -- "$SRC" && pwd)
 [ -f "$SRC/VERSION" ] || { echo "error: $SRC does not look like a Mesa tree" >&2; exit 2; }
 MESA_VERSION=$(cat "$SRC/VERSION")
 case "$MESA_VERSION" in
-    26.2.6|26.2.6-*) ;;
-    *) echo "error: expected Mesa 26.2.6, found $MESA_VERSION" >&2; exit 2 ;;
+    26.2.6|26.2.7)   ABI="${ABI:-$MESA_VERSION-arch1.1}" ;;
+    26.2.6-*|26.2.7-*) ABI="${ABI:-$MESA_VERSION}" ;;
+    *) echo "error: expected Mesa 26.2.6 or 26.2.7, found $MESA_VERSION" >&2; exit 2 ;;
 esac
 [ -f "$PATCH" ] || { echo "error: missing patch $PATCH" >&2; exit 2; }
 
@@ -151,6 +151,13 @@ if [ "$DO_INSTALL" -eq 1 ]; then
     install -m755 "$OUT" "/usr/local/lib/patched/libgallium-$ABI.so"
     install -m755 "$OUT" "$LIB"
     echo "==> installed $LIB"
-    systemctl restart phosh.service
-    echo "==> restarted phosh.service"
+    RESTARTED=0
+    for SVC in phosh.service plasma-mobile.service; do
+        if systemctl is-active --quiet "$SVC"; then
+            systemctl restart "$SVC"
+            echo "==> restarted $SVC"
+            RESTARTED=1
+        fi
+    done
+    [ "$RESTARTED" -eq 1 ] || echo "==> no active phosh/plasma-mobile session to restart"
 fi

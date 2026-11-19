@@ -293,6 +293,36 @@ All runs below use the installed system-wide library, no `/opt` or
   show occasional font glitches, but they do not affect normal use; keep it
   optional and do not enable it in the release image by default.
 
+### A9b. Mesa 26.2.7 and Vulkan VM_BIND (2026-11-19)
+
+Arch shipped `mesa 1:26.2.7-1` with a new soname,
+`libgallium-26.2.7-arch1.1.so`. Rebasing the same backport onto
+`mesa-26.2.7.tar.xz` applied cleanly; the library was rebuilt natively on the
+phone with the same `userspace/mesa/build-libgallium.sh` options and installed
+system-wide. Installed file:
+`/usr/lib/libgallium-26.2.7-arch1.1.so`,
+sha256 `081cae50fcd7836ee78a1d6ac59c46f4154752759d7efaf2015a757ab10b7c9c`
+(pristine Arch backup: `/root/lab/backup/libgallium-26.2.7-arch1.1.so.distro`,
+sha256 `0092d0cf04fea12f173a41167ac04a9fee385fbc592495d4d33099ad793f3db7`).
+The repo now carries this build as
+`userspace/mesa/libgallium-26.2.7-arch1.1.so`.
+
+Validation with Plasma Mobile on `tty1` (`WAYLAND_DISPLAY=wayland-1`):
+
+- `eglinfo`: `OpenGL core profile version: 3.1 Mesa 26.2.7-arch1.1`,
+  renderer `FD512`, both GBM and Wayland platforms.
+- `glatlas2` 3x50 (150 cycles): 150/150 clean, renderer FD512.
+  Logs: `/root/lab/logs/glatlas2-267-{1,2,3}.out`.
+- `kwin_wayland` maps `/usr/lib/libgallium-26.2.7-arch1.1.so`; no
+  `adreno_get_param` fault and no hangcheck in `dmesg`.
+
+26.2.7 also enables Turnip's VM_BIND path on a5xx, which hit the separate
+kernel oops described in section D. With the patched `msm.ko` loaded,
+`/root/lab/msm_vmtest.py` returns `EINVAL` for `EN_VM_BIND`, `VA_START` and
+`VA_SIZE`, so Turnip falls back to the shared VM (`has_vm_bind=false`) and the
+GPU stays active. Both fixes are required on 26.2.7: the kernel patch stops
+the oops, the libgallium backport stops the glyph loss.
+
 ### A10. Remaining work
 
 - The fix is now carried in the repo as
