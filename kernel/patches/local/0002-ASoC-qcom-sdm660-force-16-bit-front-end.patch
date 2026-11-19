@@ -1,0 +1,128 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: kudanilmakantahwu <kudanilmakantahwu@users.noreply.github.com>
+Date: Thu, 20 Nov 2026 05:00:00 +0700
+Subject: [PATCH] ASoC: qcom: sdm660: force a 16-bit MultiMedia1 front end
+
+On the Xiaomi Redmi Note 7 (lavender) MultiMedia1 feeds the Primary MI2S
+backend, which the machine driver fixes at 48 kHz / S16_LE for the MAX98937
+speaker amplifier.  When userspace opens the front end at S24_LE the Q6 DSP
+behaves as if only the low 16 bits of every sample reach the amp, so playback
+is about 48 dB (a factor of 256) too quiet -- clean, but barely audible.
+
+Constrain the front end PCM to S16_LE in .startup so every client, on every
+distribution, gets the loud path without a userspace format rule.  The quirk
+is opt-in through the "qcom,force-s16-fe" sound-card property and only
+touches the MultiMedia1 playback front end.
+---
+ arch/arm64/boot/dts/qcom/sdm660-xiaomi-lavender-common.dtsi |  8 +++++
+ sound/soc/qcom/sm8250.c                                      | 29 ++++++++++++++
+ 2 files changed, 37 insertions(+)
+--- a/arch/arm64/boot/dts/qcom/sdm660-xiaomi-lavender-common.dtsi
++++ b/arch/arm64/boot/dts/qcom/sdm660-xiaomi-lavender-common.dtsi
+@@ -653,6 +653,14 @@
+ 	compatible = "qcom,sdm660-sndcard";
+ 	model = "Xiaomi Redmi Note 7";
+ 
++	/*
++	 * The Q6 DSP mishandles a 24-bit MultiMedia1 front end feeding the
++	 * 16-bit Primary MI2S backend: only the low 16 bits of each sample
++	 * reach the MAX98937, which is about 48 dB too quiet.  Keep the
++	 * front end at S16_LE to match the backend.
++	 */
++	qcom,force-s16-fe;
++
+ 	pinctrl-0 = <&cdc_pdm_default>,
+ 			<&cdc_dmic_default>,
+ 			<&pri_mi2s_active>;
+--- a/sound/soc/qcom/sm8250.c
++++ b/sound/soc/qcom/sm8250.c
+@@ -2,8 +2,10 @@
+ // Copyright (c) 2020, Linaro Limited
+ 
+ #include <dt-bindings/sound/qcom,q6afe.h>
++#include <dt-bindings/sound/qcom,q6asm.h>
+ #include <linux/module.h>
+ #include <linux/platform_device.h>
++#include <linux/property.h>
+ #include <sound/soc.h>
+ #include <sound/soc-dapm.h>
+ #include <sound/pcm.h>
+@@ -20,6 +22,7 @@
+ 
+ struct sm8250_snd_data {
+ 	bool stream_prepared[AFE_PORT_MAX];
++	bool force_s16_fe;
+ 	struct snd_soc_card *card;
+ 	struct snd_soc_jack jack;
+ 	struct snd_soc_jack usb_offload_jack;
+@@ -71,6 +74,33 @@
+ 	return 0;
+ }
+ 
++/*
++ * Some boards (currently the Xiaomi Redmi Note 7) route MultiMedia1 to a
++ * 16-bit Primary MI2S backend.  The Q6 DSP mishandles that conversion: with
++ * a 24-bit front end it behaves as if only the low 16 bits of each sample
++ * reach the codec, which makes playback ~48 dB too quiet.  Keep the front
++ * end at S16_LE so it matches the backend.
++ */
++static int sm8250_fe_startup(struct snd_pcm_substream *substream)
++{
++	struct snd_soc_pcm_runtime *rtd = snd_soc_substream_to_rtd(substream);
++	struct sm8250_snd_data *data = snd_soc_card_get_drvdata(rtd->card);
++	struct snd_soc_dai *cpu_dai = snd_soc_rtd_to_cpu(rtd, 0);
++
++	if (!data->force_s16_fe ||
++	    substream->stream != SNDRV_PCM_STREAM_PLAYBACK ||
++	    cpu_dai->id != MSM_FRONTEND_DAI_MULTIMEDIA1)
++		return 0;
++
++	return snd_pcm_hw_constraint_mask64(substream->runtime,
++					    SNDRV_PCM_HW_PARAM_FORMAT,
++					    SNDRV_PCM_FMTBIT_S16_LE);
++}
++
++static const struct snd_soc_ops sm8250_fe_ops = {
++	.startup = sm8250_fe_startup,
++};
++
+ static int sm8250_snd_startup(struct snd_pcm_substream *substream)
+ {
+ 	unsigned int fmt = SND_SOC_DAIFMT_BP_FP;
+@@ -175,6 +205,21 @@
+ 	}
+ }
+ 
++static void sm8250_add_fe_ops(struct snd_soc_card *card)
++{
++	struct sm8250_snd_data *data = snd_soc_card_get_drvdata(card);
++	struct snd_soc_dai_link *link;
++	int i;
++
++	if (!data->force_s16_fe)
++		return;
++
++	for_each_card_prelinks(card, i, link) {
++		if (link->no_pcm == 0 && !link->ops)
++			link->ops = &sm8250_fe_ops;
++	}
++}
++
+ static int sm8250_platform_probe(struct platform_device *pdev)
+ {
+ 	struct snd_soc_card *card;
+@@ -195,12 +240,14 @@
+ 	card->dev = dev;
+ 	dev_set_drvdata(dev, card);
+ 	snd_soc_card_set_drvdata(card, data);
++	data->force_s16_fe = device_property_read_bool(dev, "qcom,force-s16-fe");
+ 	ret = qcom_snd_parse_of(card);
+ 	if (ret)
+ 		return ret;
+ 
+ 	card->driver_name = of_device_get_match_data(dev);
+ 	sm8250_add_be_ops(card);
++	sm8250_add_fe_ops(card);
+ 	return devm_snd_soc_register_card(dev, card);
+ }
+ 

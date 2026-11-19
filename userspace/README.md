@@ -94,7 +94,7 @@ rollback, and evidence. This is a userspace fix; the kernel is not patched.
 | `conf.d/sdm660/sdm660.conf` | Same, matched on the driver name alone |
 | `Qualcomm/lavender/HiFi.conf` | `HiFi` verb with the `Speaker` device |
 | `Qualcomm/lavender/Mic.conf` | Separate `Mic` verb (ACP capture probe fails on 7.2.3; keeping it out of HiFi preserves the speaker profile) |
-| `wireplumber/wireplumber.conf.d/50-lavender-s16.conf` | Forces the speaker sink to open the ALSA PCM at `S16LE` |
+| `wireplumber/wireplumber.conf.d/50-lavender-s16.conf` | Forces the speaker sink to open the ALSA PCM at `S16LE` (fallback for kernels without the `qcom,force-s16-fe` quirk) |
 
 The `Speaker` device routes `MultiMedia1` to Primary MI2S
 (`PRI_MI2S_RX Audio Mixer MultiMedia1`) and sets the MAX98937 gains; the `Mic`

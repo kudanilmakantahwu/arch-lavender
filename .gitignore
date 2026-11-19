@@ -1,5 +1,6 @@
 # build outputs
 kernel/out/
+kernel/out-quirk/
 kernel/src/
 # historical postmarketOS workspace (not part of the Arch image)
 pmos/

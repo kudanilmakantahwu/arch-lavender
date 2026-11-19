@@ -417,6 +417,26 @@ format quirk): with only the repo WirePlumber rule, Firefox playback opened
 was loud and clean at 100%.  The rule alone is sufficient once the card is
 present.
 
+### Kernel-side fix (works on any distribution)
+
+A userspace rule only helps distributions that install it, so the same
+constraint now lives in the machine driver.  The sound card opts in with the
+`qcom,force-s16-fe` property; `sm8250_fe_startup()` then masks the front end
+PCM's format to `S16_LE` for `MultiMedia1` playback, and `sm8250_add_fe_ops()`
+attaches those ops to the front-end links during probe.  The property is
+opt-in, so no other `sm8250` board is affected.  The patch is
+`kernel/patches/local/0002-ASoC-qcom-sdm660-force-16-bit-front-end.patch`.
+
+Hardware validation (7.2.3, 2026-11-20) with the WirePlumber rule **removed**
+and the sink carrying no `audio.format` property: `/proc/device-tree/sound/
+qcom,force-s16-fe` was present, Firefox opened `hw:0,0` at `S16_LE`, 48 kHz,
+2 channels (`state: RUNNING`) and the speaker was loud and clean at full
+volume.  That proves the kernel constraint alone is enough: a distribution
+only needs the kernel, its DTB, and the `snd-soc-sm8250` module.
+
+The WirePlumber rule is still shipped for older kernels that predate the
+quirk, but it is no longer required by the current boot image.
+
 One UCM detail matters: ACP probes every device in a verb.  On 7.2.3 the
 `MultiMedia2` capture PCM (`hw:X7,1`) fails to open with `EINVAL`, which made
 the whole `HiFi` profile unsupported and left only `Dummy Output`.  The

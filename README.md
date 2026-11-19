@@ -29,7 +29,7 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **GPU (Adreno 512, a5xx)** | Partial | 7.2.3 includes the upstream a5xx fixes |
 | **Charging & Battery** | Working | Standard charging and battery reporting work |
 | **Offline Charging** | Broken | System does not boot into offline charging mode |
-| **Microphone, Speaker, Earpiece** | Partial | Speaker and earpiece work (UCM2 HiFi profile + WirePlumber `S16LE` rule, MAX98937 amp); microphone is a separate UCM verb because its capture probe currently fails on 7.2.3. Kernel needs `CONFIG_SND_SOC_SM8250=m` |
+| **Microphone, Speaker, Earpiece** | Partial | Speaker and earpiece work (UCM2 HiFi profile, MAX98937 amp; kernel pins the MultiMedia1 front end to `S16_LE`, so no userspace rule is needed on the current kernel); microphone is a separate UCM verb because its capture probe currently fails on 7.2.3. Kernel needs `CONFIG_SND_SOC_SM8250=m` |
 | **Modem & SIM Detection** | Working | SIM **must** be placed in Slot 1 |
 | **LTE Registration** | Working | Network registration succeeds |
 | **SMS** | Working | Via ModemManager / `mmcli` |

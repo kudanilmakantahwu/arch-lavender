@@ -67,8 +67,8 @@ docker run --rm \
    `pahole`, `openssl`, `xz`, `zstd`, and friends;
 2. downloads the pinned commit tarball and verifies its SHA-256;
 3. applies `patches/*.patch` only when `APPLY_PATCHES=1`, then always applies
-   `patches/local/*.patch` (the MAX98937 speaker-amp driver and lavender audio
-   device-tree nodes);
+   `patches/local/*.patch` (the MAX98937 speaker-amp driver, the lavender
+   audio device-tree nodes, and the `qcom,force-s16-fe` front-end quirk);
 4. copies the pmOS config and runs `make olddefconfig`;
 5. builds `make ARCH=arm64 LLVM=1 all Image.gz modules`;
 6. installs modules with `INSTALL_MOD_STRIP=1`;

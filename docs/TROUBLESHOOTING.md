@@ -578,7 +578,18 @@ bits of every 24-bit sample reach the MAX98937: about 48 dB (a factor of 256)
 of loss.  The vendor kernel never hits this because its
 `mi2s_rx_cfg[PRIM_MI2S]` is already `S16_LE`.
 
-The fix is the WirePlumber rule shipped in `userspace/audio`:
+Since 7.2.3-sdm660 build `v1.2`, the machine driver itself pins the front end
+to `S16_LE` whenever the device tree sets `qcom,force-s16-fe`, so the format
+is already correct for every client and every distribution:
+
+```sh
+ls /proc/device-tree/sound/qcom,force-s16-fe
+cat /proc/asound/card0/pcm0p/sub0/hw_params    # format: S16_LE
+```
+
+If the property is missing, the running kernel/boot image predates the quirk.
+Install the WirePlumber rule shipped in `userspace/audio` as a userspace
+fallback:
 
 ```sh
 sudo install -Dm644 \

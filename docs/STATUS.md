@@ -38,7 +38,7 @@ broken or untested, and is described in the sections below.
 | Offline Charging | Broken | System does not boot into offline charging mode |
 | Audio – Earpiece | Working | PM660L (PM8916-compatible) analog codec on internal MI2S |
 | Audio – Microphone | Partial | PM660L ADC1 in a separate UCM verb; `hw:X7,1` capture open currently fails with `EINVAL` on 7.2.3 |
-| Audio – Speaker | Working | MAX98937 smart amp on Primary MI2S (`max98937` driver); needs `CONFIG_SND_SOC_SM8250=m`; sink forced to `S16LE` |
+| Audio – Speaker | Working | MAX98937 smart amp on Primary MI2S (`max98937` driver); needs `CONFIG_SND_SOC_SM8250=m`; kernel pins the front end to `S16_LE` (`qcom,force-s16-fe`) |
 | Modem & SIM Detection | Working | SIM **must** be in slot 1 |
 | LTE Registration | Working | Network registration succeeds |
 | SMS | Working | Via ModemManager / `mmcli` |
@@ -155,12 +155,17 @@ currently fails to open (see below):
   device in a verb, and `hw:X7,1` currently fails to open with `EINVAL`, which
   would otherwise mark the whole HiFi profile unsupported and leave only
   `Dummy Output`.
-- `userspace/audio/wireplumber` forces the speaker sink to `S16LE`.  PipeWire
-  otherwise opens the `MultiMedia1` front end at `S24_LE` while the machine
-  driver fixes Primary MI2S at `S16_LE`; the Q6 DSP then behaves as if only
-  the low 16 bits reach the MAX98937, so playback is clean but ~48 dB too
-  quiet.  The rule covers every client on the speaker sink, including
-  Waydroid, and leaves the headphone and microphone formats alone.
+- The MultiMedia1 front end must run at `S16_LE` to match the Primary MI2S
+  backend.  When it runs at `S24_LE`, the Q6 DSP behaves as if only the low 16
+  bits reach the MAX98937, so playback is clean but ~48 dB too quiet.  The
+  kernel enforces this for the sound card when the device tree sets
+  `qcom,force-s16-fe` (`kernel/patches/local/0002-...`); the constraint is
+  opt-in and only touches `MultiMedia1` playback.  This means any distribution
+  gets the loud path from the kernel alone, with no userspace rule.
+- `userspace/audio/wireplumber` installs a rule that forces the speaker sink
+  to `S16LE` as well.  It is kept for kernels that predate the kernel quirk and
+  is harmless with it: it only matches the speaker sink and leaves the
+  headphone and microphone formats alone.
 
 In-call audio is a separate problem; see "Phone call audio" above.
 
