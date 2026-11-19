@@ -45,6 +45,25 @@ docker run --rm -e APPLY_PATCHES=1 ... alpine:edge sh /work/build.sh
 `0001`–`0005` come from Fabricio Akio and Dmitry Baryshkov (FROMLIST,
 Sep–Nov 2026). `0006` is from Fabricio Akio (linux-wireless, Oct 2026).
 
+### Local patches
+
+`kernel/patches/local/` is applied on **every** build. It currently contains:
+
+| Patch | Effect |
+| --- | --- |
+| `0001-ASoC-add-MAX98937-and-enable-lavender-audio.patch` | MAX98937 speaker amplifier driver and the lavender audio device-tree nodes |
+| `0002-drm-msm-reject-vm-bind-without-private-vm.patch` | rejects `MSM_PARAM_EN_VM_BIND` and `MSM_PARAM_VA_START`/`VA_SIZE` when the GPU has no per-process page tables |
+
+`0002` fixes a kernel oops on the Adreno 512. `adreno_set_param()` compared
+`ctx->vm` with `gpu->vm`, but the context VM is created lazily, so `ctx->vm` is
+still `NULL` when userspace enables VM_BIND. a5xx has no
+`create_private_vm`, so `msm_context_vm()` returns `NULL` for the
+userspace-managed VM and the following `MSM_PARAM_VA_START` query dereferences
+it (`adreno_get_param+0x12c`, translation fault at `0x18`, then a GPU
+hangcheck lockup). Mesa 26.2.7's Turnip driver takes exactly this path. The
+patch is a backport of upstream commits `445f3f992eb8` and `c61563d7d541`,
+plus a `NULL` check in `valid_per_process_vm()`.
+
 ## Local build
 
 The build runs inside `alpine:edge` so the toolchain matches the one used for
@@ -67,8 +86,8 @@ docker run --rm \
    `pahole`, `openssl`, `xz`, `zstd`, and friends;
 2. downloads the pinned commit tarball and verifies its SHA-256;
 3. applies `patches/*.patch` only when `APPLY_PATCHES=1`, then always applies
-   `patches/local/*.patch` (the MAX98937 speaker-amp driver and lavender audio
-   device-tree nodes);
+   `patches/local/*.patch` (the MAX98937 speaker-amp driver, the lavender
+   audio device-tree nodes, and the a5xx VM_BIND guard);
 4. copies the pmOS config and runs `make olddefconfig`;
 5. builds `make ARCH=arm64 LLVM=1 all Image.gz modules`;
 6. installs modules with `INSTALL_MOD_STRIP=1`;

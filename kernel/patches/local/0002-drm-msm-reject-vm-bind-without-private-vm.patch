@@ -1,0 +1,70 @@
+drm/msm: reject VM_BIND on GPUs without per-process pgtables
+
+adreno_set_param() checks ctx->vm == gpu->vm before allowing
+MSM_PARAM_EN_VM_BIND.  VMs are created lazily, so ctx->vm is still NULL
+when userspace opts in, and the check passes even on a5xx, which has no
+create_private_vm callback.  msm_context_vm() then returns NULL for the
+userspace-managed VM, and the next MSM_PARAM_VA_START/VA_SIZE query
+dereferences it:
+
+  adreno_get_param+0x12c: level 2 translation fault at 0x18 (param 0x0e)
+  msm_dpu: hangcheck detected gpu lockup rb 2
+  msm_dpu: offending task: kwin_wayland
+
+Mesa 26.2.7 enables VM_BIND whenever MSM_PARAM_EN_VM_BIND succeeds and
+immediately queries the VA range, so userspace hits this on the Adreno
+512 during session startup.
+
+Check for the create_private_vm callback instead of ctx->vm, and reject
+a NULL VM in the VA range queries.  This makes Mesa fall back to the
+shared VM instead of entering a half-initialized VM_BIND mode.
+
+Backport of upstream commits 445f3f992eb8 ("drm/msm: Fix
+per-process-pgtables check") and c61563d7d541 ("drm/msm: Add helper to
+check for per-process pgtables VM"), with an additional NULL check in
+valid_per_process_vm().
+---
+ drivers/gpu/drm/msm/adreno/adreno_gpu.c | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/adreno/adreno_gpu.c b/drivers/gpu/drm/msm/adreno/adreno_gpu.c
+index c8f177cca..1b41846c3 100644
+--- a/drivers/gpu/drm/msm/adreno/adreno_gpu.c
++++ b/drivers/gpu/drm/msm/adreno/adreno_gpu.c
+@@ -356,6 +356,12 @@ int adreno_fault_handler(struct msm_gpu *gpu, unsigned long iova, int flags,
+ 	return 0;
+ }
+ 
++static bool
++valid_per_process_vm(struct msm_gpu *gpu, struct drm_gpuvm *vm)
++{
++	return vm && vm != gpu->vm;
++}
++
+ int adreno_get_param(struct msm_gpu *gpu, struct msm_context *ctx,
+ 		     uint32_t param, uint64_t *value, uint32_t *len)
+ {
+@@ -414,12 +420,12 @@ int adreno_get_param(struct msm_gpu *gpu, struct msm_context *ctx,
+ 		*value = gpu->suspend_count;
+ 		return 0;
+ 	case MSM_PARAM_VA_START:
+-		if (vm == gpu->vm)
++		if (!valid_per_process_vm(gpu, vm))
+ 			return UERR(EINVAL, drm, "requires per-process pgtables");
+ 		*value = vm->mm_start;
+ 		return 0;
+ 	case MSM_PARAM_VA_SIZE:
+-		if (vm == gpu->vm)
++		if (!valid_per_process_vm(gpu, vm))
+ 			return UERR(EINVAL, drm, "requires per-process pgtables");
+ 		*value = vm->mm_range;
+ 		return 0;
+@@ -505,7 +511,7 @@ int adreno_set_param(struct msm_gpu *gpu, struct msm_context *ctx,
+ 		return msm_context_set_sysprof(ctx, gpu, value);
+ 	case MSM_PARAM_EN_VM_BIND:
+ 		/* We can only support VM_BIND with per-process pgtables: */
+-		if (ctx->vm == gpu->vm)
++		if (!gpu->funcs->create_private_vm)
+ 			return UERR(EINVAL, drm, "requires per-process pgtables");
+ 
+ 		/*

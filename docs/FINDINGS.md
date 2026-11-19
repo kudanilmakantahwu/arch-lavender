@@ -432,3 +432,52 @@ Do not raise `Digital Volume` to compensate: it cannot restore the truncated
 low bits and only adds clipping gain.  A true 24-bit path would need the BE
 format, BCLK ratio, and MAX98937 PCM mode changed together; 16-bit matches
 the vendor configuration and the amp's init sequence.
+
+## D. Kernel oops on a5xx: VM_BIND with a NULL VM (fixed 2026-11-19)
+
+While testing Plasma Mobile with Mesa `1:26.2.7-1`, the kernel logged three
+`adreno_get_param+0x12c` translation faults at `0x18` for param `0x0e`
+(`MSM_PARAM_VA_START`), then hangcheck declared the GPU locked:
+
+```
+pc : adreno_get_param+0x12c/0x364 [msm]
+...
+msm_dpu c901000.display-controller: [drm:hangcheck_handler [msm]] *ERROR* 05010200: hangcheck detected gpu lockup rb 2!
+msm_dpu c901000.display-controller: [drm:recover_worker [msm]] *ERROR* 05010200: hangcheck recover!
+```
+
+The faulting task was `RenderNext` (PID 15245) on CPU 5; the first fault was
+at 8127.64 s uptime.  The hangcheck report named `kwin_wayland` as the
+offending task.
+
+Root cause: `adreno_set_param()` checked `ctx->vm == gpu->vm` before allowing
+`MSM_PARAM_EN_VM_BIND`, but context VMs are created lazily, so `ctx->vm` is
+still `NULL` when userspace opts in.  The check passed even on a5xx, which has
+no `create_private_vm` callback.  `msm_context_vm()` then returned the shared
+VM for kernel-managed contexts but `NULL` for the userspace-managed VM, and
+the following `MSM_PARAM_VA_START` query dereferenced it.
+
+Mesa 26.2.7's Turnip driver takes exactly this path: it enables VM_BIND when
+the ioctl succeeds and immediately queries the VA range.
+
+Fix: `kernel/patches/local/0002-drm-msm-reject-vm-bind-without-private-vm.patch`
+(backport of upstream `445f3f992eb8` and `c61563d7d541`, plus a `NULL` check
+in `valid_per_process_vm()`).  It rejects `MSM_PARAM_EN_VM_BIND` when
+`gpu->funcs->create_private_vm` is missing, and returns `EINVAL` from the VA
+range queries when the VM is `NULL` or shared, so Mesa falls back to the
+shared VM.
+
+Deployed by rebuilding only `msm.ko` in the exact 7.2.3 tree with Alpine clang
+23.1.5, replacing the module inside
+`initramfs/arch-initramfs-fsck.gz` (`msm.ko.zst` sha256 `c651b727…` to
+`e823fe11…`), and repacking the boot image with the original kernel+DTB bytes
+(kernel+DTB sha256 `4da17ed1…`, new boot image sha256 `dab93780…`).  The boot
+partition readback matched the new image byte-for-byte.  The loaded module
+`srcversion` changed from `4F1296AAC73ACFA88B7DB14` to
+`6DA9B6BCFBAAAB224541028`, proving the initramfs copy is the patched one.
+
+Validation: `/root/lab/msm_vmtest.py` opens `/dev/dri/card1`, issues
+`MSM_PARAM_EN_VM_BIND`, then `MSM_PARAM_VA_START` and `MSM_PARAM_VA_SIZE`.
+The patched kernel returns `EINVAL` for all three, with no oops and no
+hangcheck; the GPU runtime status stays `active`.  Before the patch the SET
+succeeded and the first VA_START query produced the fault above.
