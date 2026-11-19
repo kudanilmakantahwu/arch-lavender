@@ -10,7 +10,7 @@
 | Root filesystem | ext4, label `pmOS_root`, grown to 50 GiB |
 | Modem | Telkomsel, MCC/MNC `510/10`, LTE |
 | Boot | `fastboot flash userdata` + `fastboot flash boot` |
-| Default UI | Phosh on `graphical.target` (`tty1`), `getty@tty2` fallback |
+| Default UI | Phosh on `graphical.target` (`tty1`); SSH recovery, `getty@tty2` with a USB keyboard |
 
 Package versions from the tested image:
 
@@ -69,7 +69,8 @@ The image boots into Phosh:
 - `phosh.service` enabled: phoc + Phosh on `tty1` as user `alarm`
 - `seatd`, `systemd-networkd`, `NetworkManager`, and `sshd` enabled
 - `getty@tty1` disabled so it cannot fight the compositor
-- `getty@tty2` enabled as a text-console fallback (Ctrl+Alt+F2)
+- `getty@tty2` enabled for a USB-keyboard text console (SSH is the normal
+  recovery path; the phone has no built-in keyboard)
 - `GSK_RENDERER=ngl` in both `/etc/environment` and the Phosh unit
 - `FD_MESA_DEBUG=noubwc` in both `/etc/environment` and the Phosh unit
 
@@ -80,11 +81,14 @@ network, and modem path are identical regardless of how the session is used.
 
 - Boot, reboot, and shutdown
 - Phosh desktop on `tty1`, with squeekboard on-screen keyboard
+- Plasma Mobile 6.8.3 on `tty1` (tested 2026-11-19: KWin Wayland, plasmashell and
+  the mobile shell start, SSH stays reachable; startup QML warnings are
+  non-fatal). See [`DESKTOP.md`](DESKTOP.md)
 - GL renderer (`ngl`) for ~2x faster scrolling; the patched a5xx `libgallium`
   fixes the 2D-blit glyph/texture loss (`userspace/mesa/`), while `cairo`
   remains a temporary fallback if a program still misrenders
 - UBWC disabled for the session, so Firefox/WebRender and other GPU apps render correctly
-- Console on `tty2` with a readable 16×32 font
+- Console on `tty2` with a readable 16×32 font (USB keyboard required)
 - SSH over USB RNDIS (`172.16.42.1`)
 - SSH over WiFi
 - zram compressed swap (`/dev/zram0`, half of RAM, `zstd`)

@@ -12,7 +12,7 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | Property | Details |
 | --- | --- |
 | **Default Install** | **Phosh desktop** — graphical session on `tty1`, SSH over USB RNDIS & Wi-Fi |
-| **GUI** | Phosh is the default UI; `getty@tty2` remains as a text-console fallback |
+| **GUI** | Phosh is the default UI; recover over SSH (USB/Wi-Fi). `getty@tty2` needs a USB/OTG keyboard |
 | **Kernel** | `7.2.3-sdm660` from [`sdm660-mainline/linux`](https://github.com/sdm660-mainline/linux) |
 | **Root Filesystem** | Arch Linux ARM (`aarch64`), `ext4` |
 | **Bootloader** | Unlocked bootloader required |
@@ -38,7 +38,7 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **Package Management** | Working | `pacman` and package updates work properly |
 | **Compressed swap (zram)** | Working | `/dev/zram0`, half of RAM, `zstd`, priority 100 |
 | **PC internet over USB** | Working | `scripts/nat.sh` (NAT on the PC side) |
-| **On-device console** | Working | 16×32 font on `getty@tty2` (Ctrl+Alt+F2) |
+| **On-device console** | Working | 16×32 font on `getty@tty2`; needs a USB/OTG keyboard |
 | **Bluetooth** | Broken | — |
 | **Vibration** | Broken | — |
 | **Flashlight / Torch** | Broken | — |
@@ -50,6 +50,7 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **Fingerprint Sensor** | Broken | — |
 | **Waydroid (optional)** | Working | Not enabled by default; occasional font glitches, otherwise stable |
 | **Phosh / GUI Session** | Working | Default UI; GL renderer (`GSK_RENDERER=ngl`, ~2x faster than cairo) plus `FD_MESA_DEBUG=noubwc` for the Adreno 512 UBWC bug, see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
+| **Plasma Mobile (optional)** | Experimental | 6.8.3 starts on `tty1` (KWin + plasmashell) with non-fatal QML warnings; see [`docs/DESKTOP.md`](docs/DESKTOP.md) |
 
 Phosh is the default session. To run Plasma Mobile, GNOME, Sway, Hyprland or
 another DE/WM without losing the device patches, see
@@ -147,8 +148,10 @@ tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep -E 'GSK_RENDERER|FD_MESA_D
 ```
 
 `getty@tty2` stays enabled with a readable 16×32 console font
-(`latarcyrheb-sun32`), so Ctrl+Alt+F2 always gives a text console if the
-session misbehaves. `tty1` is reserved for Phosh.
+(`latarcyrheb-sun32`), but the phone has no built-in keyboard. Without a
+USB/OTG keyboard, the recovery path is **SSH over USB or Wi-Fi**; keep a
+session open before changing the graphical stack. `tty1` is reserved for
+Phosh.
 
 ---
 

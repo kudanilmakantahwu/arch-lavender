@@ -15,7 +15,7 @@ erases data.
 - [4. Build the root filesystem image](#4-build-the-root-filesystem-image)
 - [5. Flash the phone](#5-flash-the-phone)
 - [6. First boot and first login](#6-first-boot-and-first-login)
-- [6a. The console fallback](#6a-the-console-fallback)
+- [6a. The console fallback (USB keyboard only)](#6a-the-console-fallback-usb-keyboard-only)
 - [6b. Internet over USB (optional)](#6b-internet-over-usb-optional-before-wifi)
 - [7. Grow the root filesystem](#7-grow-the-root-filesystem)
 - [8. Set the root password and add a user](#8-set-the-root-password-and-add-a-user)
@@ -180,7 +180,7 @@ The script:
   patched-wlroots leftovers, so only `root` and `alarm` can log in,
 - installs and enables Phosh, `seatd`, `systemd-networkd`, `NetworkManager`,
   and `sshd`, and sets `default.target` to `graphical.target`,
-- keeps `getty@tty2` as a text-console fallback and leaves `tty1` to Phosh,
+- keeps `getty@tty2` for a USB-keyboard text console and leaves `tty1` to Phosh,
 - loads a readable 16×32 console font (`/etc/vconsole.conf`),
 - sets both `root` and `alarm` passwords to `arch`,
 - removes SSH host keys and the machine id,
@@ -307,14 +307,17 @@ The rootfs creates a USB RNDIS gadget with a fixed address:
 
 The phone also boots straight into Phosh on its own display, so you can log in
 with the touchscreen if SSH is not reachable. If the graphical session
-misbehaves, Ctrl+Alt+F2 switches to the `getty@tty2` text console. A USB
-keyboard through an OTG adapter also works.
+misbehaves, log in over SSH (USB or Wi-Fi) and fix it from there. The
+`getty@tty2` text console is available too, but the phone has no built-in
+keyboard, so it needs a USB keyboard through an OTG adapter.
 
-## 6a. The console fallback
+## 6a. The console fallback (USB keyboard only)
 
-Phosh owns `tty1`. If the session fails or you need a text shell on the device,
-press **Ctrl+Alt+F2** to reach `getty@tty2` (log in as `root` or `alarm`, both
-password `arch`). Ctrl+Alt+F1 switches back to Phosh.
+Phosh owns `tty1`. `getty@tty2` stays enabled, but reaching it requires a
+physical keyboard: press **Ctrl+Alt+F2** with a USB/OTG keyboard attached and
+log in as `root` or `alarm` (both password `arch`). Ctrl+Alt+F1 switches back
+to Phosh. Without a keyboard, use SSH over USB or Wi-Fi instead; that is the
+normal recovery path for this phone.
 
 The panel is 1080×2340, so the kernel's default 8×16 font is tiny. The image
 sets `FONT=latarcyrheb-sun32` in `/etc/vconsole.conf`, a 16×32 font that is
@@ -677,7 +680,8 @@ Phosh is the default UI and starts automatically on `tty1` as user `alarm`:
 - `phoc` is the Wayland compositor,
 - `squeekboard` provides the on-screen keyboard,
 - `seatd` grants the session access to DRM/input devices,
-- `getty@tty2` stays enabled as a text-console fallback.
+- `getty@tty2` stays enabled for a USB-keyboard text console; without a USB
+  keyboard, use SSH over USB or Wi-Fi as the recovery path.
 
 The image ships `GSK_RENDERER=ngl` in `/etc/environment` and in the Phosh unit.
 On the Adreno 512 the GL renderer scrolls a 4000-line GTK4 text view at ~50 fps
@@ -710,7 +714,8 @@ systemctl disable phosh
 reboot
 ```
 
-Then log in on `tty1`/`tty2` or over SSH. To restore the default UI:
+Then log in over SSH, or on `tty2` with a USB keyboard. To restore the
+default UI:
 
 ```sh
 systemctl set-default graphical.target

@@ -152,8 +152,9 @@ sudo ip addr add 172.16.42.2/24 dev usb0
 sudo ip link set usb0 up
 ```
 
-If no interface appears, the RNDIS gadget did not start. On the phone (the
-`getty@tty2` console, Ctrl+Alt+F2, or a serial console):
+If no interface appears, the RNDIS gadget did not start. On the phone, log in
+over Wi-Fi SSH (the USB link is what you are debugging), or use `getty@tty2`
+with a USB keyboard:
 
 ```sh
 systemctl status usb-net-debug
@@ -192,7 +193,8 @@ Common causes:
 - The host does not support RNDIS (rare on Linux; Windows needs the RNDIS
   driver).
 
-To rule the ownership bug in or out from the phone's console:
+To rule the ownership bug in or out from a USB-keyboard console
+(`getty@tty2`), or over Wi-Fi SSH if `sshd` still starts:
 
 ```sh
 ls -ln /usr/bin/mount /usr/bin/sudo /usr/share/empty.sshd
@@ -279,8 +281,8 @@ if the command is missing.
 
 The default kernel font on a 1080×2340 panel is 8×16. The image sets a 16×32
 font (`latarcyrheb-sun32`) in `/etc/vconsole.conf`. The graphical session runs
-on `tty1`; the font applies to the `getty@tty2` fallback. Check and change it
-live:
+on `tty1`; the font applies to the `getty@tty2` console, which needs a USB/OTG
+keyboard on this phone. Check and change it live:
 
 ```sh
 stty -F /dev/tty2 size          # 73 67 with the big font, 146 135 with 8x16
@@ -295,9 +297,10 @@ file: check `systemctl status systemd-vconsole-setup` and try running
 
 ### No text console at all
 
-Phosh owns `tty1`, so `getty@tty1` is intentionally disabled. Switch to the
-fallback console with **Ctrl+Alt+F2** (`getty@tty2`), or log in over SSH.
-Check:
+Phosh owns `tty1`, so `getty@tty1` is intentionally disabled. `getty@tty2` is
+enabled, but this phone has no built-in keyboard, so reaching it needs a
+USB/OTG keyboard and **Ctrl+Alt+F2**. Without one, log in over SSH (USB or
+Wi-Fi) instead. Check:
 
 ```sh
 systemctl is-enabled getty@tty2
@@ -819,5 +822,5 @@ systemctl disable phosh
 reboot
 ```
 
-`getty@tty2` is always available with Ctrl+Alt+F2, and SSH over USB stays up,
-so a broken session is never a lockout.
+SSH over USB stays up, so a broken session is never a lockout. `getty@tty2`
+is also available with Ctrl+Alt+F2 when a USB keyboard is attached.
