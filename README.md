@@ -51,6 +51,10 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **Waydroid (optional)** | Working | Not enabled by default; occasional font glitches, otherwise stable |
 | **Phosh / GUI Session** | Working | Default UI; GL renderer (`GSK_RENDERER=ngl`, ~2x faster than cairo) plus `FD_MESA_DEBUG=noubwc` for the Adreno 512 UBWC bug, see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
 
+Phosh is the default session. To run Plasma Mobile, GNOME, Sway, Hyprland or
+another DE/WM without losing the device patches, see
+[`docs/DESKTOP.md`](docs/DESKTOP.md).
+
 For detailed version history and logs, see [`docs/STATUS.md`](docs/STATUS.md);
 for the renderer/memory/governor A/B measurements and the final tuned
 defaults, see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
@@ -155,6 +159,7 @@ session misbehaves. `tty1` is reserved for Phosh.
 ├── README.md
 ├── docs/
 │   ├── INSTALL.md           Full installation walkthrough
+│   ├── DESKTOP.md           Switching DE/WM (Plasma Mobile, GNOME, Sway, ...)
 │   ├── HARDWARE.md          Hardware specs, partition layout, boot.img structure
 │   ├── STATUS.md            Tested kernel versions & detailed feature matrix
 │   ├── TROUBLESHOOTING.md   Boot loops, fsck, modem, Wi-Fi, and USB debugging

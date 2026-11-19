@@ -720,3 +720,8 @@ reboot
 
 The USB SSH link stays available in both cases, so a broken session is never a
 lockout.
+
+To run a different desktop environment or window manager (Plasma Mobile,
+GNOME, Sway, Hyprland, X11, ...), see [DESKTOP.md](DESKTOP.md). It includes
+session units, package lists, the patch-preservation checklist, and rollback
+steps.
