@@ -24,13 +24,14 @@ One variable (`GSK_RENDERER`), same session, same app, 12 s per run:
 | Config | Run 1 | Run 2 | Run 3 | Mean | Avg frame | Worst frame |
 | --- | --- | --- | --- | --- | --- | --- |
 | `cairo` (previous default) | 21.8 fps | 24.1 fps | 23.1 fps | **23.0 fps** | 41–46 ms | 133–152 ms |
-| `ngl` (GL, new default) | 52.0 fps | 50.4 fps | 50.5 fps | **51.0 fps** | 18.6–19.3 ms | 182–226 ms |
-| `gl` (legacy GL) | 50.3 fps | 50.2 fps | 50.8 fps | **50.4 fps** | 19.1–19.4 ms | 177–261 ms |
+| `gl` (GTK 4.24 GL renderer) | 50.3 fps | 50.2 fps | 50.8 fps | **50.4 fps** | 19.1–19.4 ms | 177–261 ms |
+| `ngl` (obsolete name; GTK 4.24 warns and ignores it) | — | — | — | — | — | — |
 
-A 22 s stress run scrolled 1207 frames (54.8 fps) with `ngl` and 542 frames
-(24.6 fps) with `cairo`; the `ngl` screenshots showed every glyph intact, so the
-historical Adreno glyph-cache bug did not reproduce. `ngl` is the new default;
-`cairo` stays available as the glyph fallback.
+The earlier measurements used a GTK version where `ngl` selected the new GL
+renderer. On the current GTK 4.24.1, `ngl` prints "The new GL renderer has been
+renamed to gl" and falls back; `gl` is the correct setting. The patched Mesa
+library fixes the independent a5xx glyph-upload bug. `cairo` remains a
+troubleshooting fallback.
 
 ## Video playback
 
@@ -39,7 +40,7 @@ historical Adreno glyph-cache bug did not reproduce. `ngl` is the new default;
 | Config | Runs | Mean |
 | --- | --- | --- |
 | `cairo` session | 33.4, 33.1 fps | 33.3 fps |
-| `ngl` session (final) | 32.4, 32.9, 32.6 fps | 32.6 fps |
+| `gl` session (final) | 32.4, 32.9, 32.6 fps | 32.6 fps |
 
 Video is decode-bound, not renderer-bound: the GL and cairo sessions are within
 noise, and the range across the whole session (31–41 fps) comes from cache and
@@ -102,7 +103,7 @@ codes 0/2/4/6.
 
 ## Final configuration and 3× retest
 
-Locked defaults: `GSK_RENDERER=ngl`, `FD_MESA_DEBUG=noubwc`, zram swap enabled,
+Locked defaults: `GSK_RENDERER=gl`, `FD_MESA_DEBUG=noubwc`, zram swap enabled,
 GPU governor `simple_ondemand`, `Digital Volume=56`, `Speaker Volume=6`, the
 WirePlumber `S16LE` speaker rule, and the speaker amp enabled by the MAX98937
 driver + UCM2 profile.

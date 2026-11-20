@@ -541,3 +541,78 @@ Tested 2026-11-20: take `18800000.wifi` out of NetworkManager management,
 Net: unbinding before suspend does not save the MSS restart and adds moving
 parts, so it is not a reason to enable suspend.  `AllowSuspend=no` stays.  The
 rebind path is useful only as a *recovery* step (TROUBLESHOOTING).
+
+## E. Mesa 26.3.1 GTK renderer and a5xx glyph fixes (2026-11-20)
+
+Two independent Mesa bugs prevented the phone from rendering GTK4 through GL:
+
+1. **a5xx 2D-blit upload loss.** Mesa 26.3.1 still contains the code path where
+   `CP_BLIT(BLIT_OP_COPY)` silently drops texture uploads on FD512. The
+   existing `0001-freedreno-a5xx-2d-blit-and-hbb.patch` is still required;
+   upstream MR !45483 was not in this branch.
+2. **No default EGL configs for GTK.** Mesa 26.3 disables GLES1 in the Arch
+   build. `dri_util.c` therefore omits `__DRI_API_GLES` from `screen->api_mask`;
+   EGL then has no `EGL_OPENGL_ES_BIT` configs. GTK 4.24's EGL config request
+   omits `EGL_RENDERABLE_TYPE`, whose EGL default is ES_BIT, so the request
+   returns zero and GTK falls back to cairo with `No EGL configuration
+   available`.
+
+The new `0002-gallium-dri-advertise-egl-es-bit.patch` sets the legacy GLES API
+bit whenever ES2 is available. It does **not** enable GLES1 contexts (`gles1`
+stays disabled); it only makes EGL publish the ES_BIT configs GTK expects.
+The existing LD_PRELOAD shim is retained only as a diagnostic fallback and is
+not part of the runtime fix.
+
+### E1. Build and verification
+
+Built Mesa 26.3.1 on-device with `-Dgles1=disabled`, `-Dopengl=true`,
+`-Dplatforms=wayland,x11`, and both repo patches. The library ABI matches the
+phone's `libEGL_mesa.so.0` (`libgallium-26.3.1-arch1.1.so`), has no unresolved
+`ldd -r` dependencies, and exports `driDestroyConfigs`.
+
+- Before patch: EGL probe reports `gtk attrs=0`; `glatlas2` on Mesa 26.3.1
+  reports `bad_cycles=30/30`, renderer FD512.
+- After both patches, without shim: the GTK attribute request reports 15
+  configs; the complete EGL list reports 75. `glatlas2` reports
+  `bad_cycles=0/30`, renderer FD512. Repeated after copying into `/usr/lib`,
+  also `bad_cycles=0/30`.
+- A GTK4 window test with `GSK_RENDERER=gl` maps `libEGL`, `libGLESv2`, and the
+  patched `libgallium`, with no `No EGL configuration` / renderer warning.
+- Phosh itself links GTK3, not GTK4; the Settings/GTK4 apps are the direct
+  consumers of this fix. The compositor (phoc) already used FD512 GLES.
+- GTK 4.24.1 warns that the old `GSK_RENDERER=ngl` name was renamed to `gl`;
+  `ngl` was ignored. The shipped default is now `GSK_RENDERER=gl`.
+
+The source tarball SHA256 was
+`4e4e438eac7b840a9383988cbb7c08dad8041da544b9319fc26d319fa7348961`; the
+built library SHA256 is `37a2bd628c39486638e1b141f4de00f409de8bd3e2c07e138bf201ac36815ceb`.
+The prebuilt is in `userspace/mesa/` and its hash is in `SHA256SUMS`. Rootfs
+build now selects the library that matches its own `libEGL_mesa` soname, rather
+than taking the first glob match.
+
+### E3. qcom-venus H.264 decode (silent capability test)
+
+`/dev/video1` is `qcom-venus`'s decoder. It advertises `H264`, `VP8`, `VP9`,
+`HEVC`, `VC1`, `MPEG4`, `MPEG2`, `H263`, and `XVID` as output (compressed)
+formats and `NV12`/`Q08C` as capture formats. A 3 s 320x240 H.264 stream
+(libx264, Constrained Baseline) was fed to `h264_v4l2m2m` with `-f null`:
+
+- The decoder opens, negotiates `output=H264` / `capture=NV12`, and the filter
+  graph starts (320x240 nv12).
+- At end of stream, `capture POLLERR` is reported and the firmware logs
+  `qcom-venus cc00000.video-codec: session error: event id:1001 (deadb000)`;
+  ffmpeg then aborts (`Assertion pkt failed at fftools/ffmpeg_dec.c`).
+
+So H.264 decode via venus is still broken, and the failure is the same
+`event id:1001` seen before — a firmware/HFI session error at the end of the
+stream, not a userspace configuration problem. No audio was played and no
+screenshot was taken during this test.
+
+### E2. Temporary on-device state
+
+The live phone has the patched library installed and `GSK_RENDERER=gl` in both
+`/etc/environment` and `phosh.service`. The original distro library is saved at
+`/usr/local/lib/patched/libgallium-26.3.1-arch1.1.so.distro`; the committed
+pacman hook restores the patched library after Mesa updates. The active GTK4
+smoke test loaded the GL stack. SSH over USB remains available. No video or
+sound test was played.

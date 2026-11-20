@@ -315,19 +315,25 @@ systemctl enable --now getty@tty2
 
 ### Text loses random letters (glyph glitches)
 
-The default renderer is `GSK_RENDERER=ngl` (GL), which scrolls text about twice
-as fast as cairo on the Adreno 512. If headers or buttons start losing letters,
-switch back to the cairo renderer, which is slower but has never corrupted
-glyphs:
+The default renderer is `GSK_RENDERER=gl`, GTK 4.24's accelerated GL renderer.
+(The old value `ngl` is no longer recognized.) The image includes a patched
+Mesa `libgallium` for the Adreno 512 2D-blit glyph bug. First verify the GL
+renderer and patched library are active:
 
 ```sh
-sed -i '/^GSK_RENDERER=/d' /etc/environment
-echo 'GSK_RENDERER=cairo' >> /etc/environment
-sed -i 's/GSK_RENDERER=ngl/GSK_RENDERER=cairo/' /etc/systemd/system/phosh.service.d/*.conf 2>/dev/null
+tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep GSK_RENDERER
+readelf -d /usr/lib/libEGL_mesa.so.0 | grep libgallium
+sha256sum /usr/lib/libgallium-*.so
+journalctl -b --no-pager | grep -E 'No EGL configuration|Failed to realize renderer'
+```
+
+If a GTK4 app still misrenders, switch to cairo temporarily:
+
+```sh
+sed -i 's/^GSK_RENDERER=.*/GSK_RENDERER=cairo/' /etc/environment
+sed -i 's/^Environment=GSK_RENDERER=.*/Environment=GSK_RENDERER=cairo/' /etc/systemd/system/phosh.service
 systemctl daemon-reload
 systemctl restart phosh
-tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep GSK_RENDERER
-# GSK_RENDERER=cairo
 ```
 
 ### Compositor dies while touching the screen (`phoc` SIGSEGV)
@@ -344,7 +350,7 @@ finished) between touch-down and touch-up:
 
 The session dies with it; `systemctl` restarts `phosh.service` and everything
 reopens. It is a wlroots 0.20/phoc bug, not a kernel or renderer problem, and
-it happens with both cairo and ngl. Confirm with:
+it happens with both cairo and GL. Confirm with:
 
 ```sh
 coredumpctl list --since '-1 hour'
@@ -877,8 +883,8 @@ Phosh is the default UI, not an opt-in experiment. Common symptoms:
 
 - Phosh starts but the screen stays black: check `systemctl status phosh`,
   `journalctl -u phosh -b`, and `dmesg | grep -i msm`.
-- Text loses random glyphs: make sure `GSK_RENDERER=cairo` reached the session
-  (see [glyph glitches](#text-loses-random-letters-glyph-glitches)).
+- Text loses random glyphs: confirm `GSK_RENDERER=gl` and the patched
+  `libgallium` are active; see [glyph glitches](#text-loses-random-letters-glyph-glitches).
 - Firefox shows magenta blocks or blank pages: make sure
   `FD_MESA_DEBUG=noubwc` reached the session (see
   [GPU app corruption](#firefox-and-other-gpu-apps-show-magenta-blocks-or-blank-pages)).

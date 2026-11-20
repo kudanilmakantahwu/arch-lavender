@@ -3,8 +3,8 @@
 #
 #   modemmanager : allow QMI modem without a net/data port (sdm660 mainline
 #                  has no IPA/BAM data path) so SIM/SMS/registration work.
-#   mesa         : keep the a5xx 2D-blit fix in libgallium after an upgrade
-#                  (see userspace/mesa/README.md).
+#   mesa         : keep the a5xx 2D-blit and EGL config fixes in libgallium
+#                  after an upgrade (see userspace/mesa/README.md).
 #
 # Triggered by /etc/pacman.d/hooks/99-local-patches.hook.
 

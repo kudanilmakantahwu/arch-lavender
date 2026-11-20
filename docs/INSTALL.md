@@ -159,7 +159,7 @@ The script:
 
 - creates an 8 GiB image with `mkfs.ext4 -L pmOS_root`,
 - extracts the tarball with ownership preserved,
-- applies `rootfs/overlay/` (fstab, passwords, `GSK_RENDERER=ngl`, sshd root
+- applies `rootfs/overlay/` (fstab, passwords, `GSK_RENDERER=gl`, sshd root
   login, USB networking, `vconsole.conf`),
 - **re-owns the whole tree as `root:root` and restores the setuid bits** on
   `mount`, `su`, `sudo`, `passwd`, … . The released tarball was repacked by an
@@ -545,15 +545,14 @@ the IPA data path.
 - ModemManager is patched. The binary is stored in
   `/usr/local/lib/patched/ModemManager`, and
   `/etc/pacman.d/hooks/99-local-patches.hook` copies it back after an upgrade.
-- Mesa is patched for the Adreno 512 2D-blit bug. The library is stored in
-  `/usr/local/lib/patched/libgallium-26.2.6-arch1.1.so` and copied into
-  `/usr/lib` by the same hook after a `mesa` upgrade. The source patch and
-  build script are in [`userspace/mesa/`](../userspace/mesa/README.md); a
-  Mesa soname bump needs a rebase and rebuild.
-- Phosh is the default session. `GSK_RENDERER=ngl` (GL renderer) is exported
-  globally because it scrolls text about twice as fast as cairo on the Adreno
-  512; see [Phosh desktop](#16-phosh-desktop) and
-  [PERFORMANCE.md](PERFORMANCE.md).
+- Mesa is patched for the Adreno 512 2D-blit bug and GTK's missing EGL ES bit.
+  The ABI-matched `libgallium` is stored in `/usr/local/lib/patched/` and
+  restored by the pacman hook after a `mesa` upgrade. The source patches and
+  build script are in [`userspace/mesa/`](../userspace/mesa/README.md); a Mesa
+  soname bump needs a rebase and rebuild.
+- Phosh is the default session. `GSK_RENDERER=gl` selects GTK 4.24's GL
+  renderer (the former `ngl` name is obsolete); see [Phosh desktop](#16-phosh-desktop)
+  and [PERFORMANCE.md](PERFORMANCE.md).
 
 ### Recommended package set
 
@@ -684,11 +683,12 @@ Phosh is the default UI and starts automatically on `tty1` as user `alarm`:
 - `getty@tty2` stays enabled for a USB-keyboard text console; without a USB
   keyboard, use SSH over USB or Wi-Fi as the recovery path.
 
-The image ships `GSK_RENDERER=ngl` in `/etc/environment` and in the Phosh unit.
+The image ships `GSK_RENDERER=gl` in `/etc/environment` and in the Phosh unit.
+GTK 4.24 renamed the GL renderer from `ngl` to `gl`; the old name is ignored.
 On the Adreno 512 the GL renderer scrolls a 4000-line GTK4 text view at ~50 fps
-against ~23 fps for cairo, and the scroll stress test rendered all glyphs
-correctly. If headers or buttons start losing letters, switch back with
-`GSK_RENDERER=cairo` and restart the session; the measurements are in
+against ~23 fps for cairo. The image also ships the patched Mesa `libgallium`
+that fixes the a5xx 2D-blit glyph loss. If a GTK4 app still misrenders, use
+`GSK_RENDERER=cairo` temporarily and restart the session; see
 [PERFORMANCE.md](PERFORMANCE.md).
 
 Check the session:

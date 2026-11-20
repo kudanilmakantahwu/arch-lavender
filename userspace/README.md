@@ -10,7 +10,7 @@ what gets installed.
 | `base/` | Qualcomm modem/DIAG services, the UIM init script, USB networking debug fallback, zram, the ModemManager "no net port" patch, and the `sleep.conf.d` drop-in that refuses suspend (s2idle is broken on this kernel). |
 | `audio/` | ALSA UCM2 profile for the SDM660 sound card (speaker + microphone routing), the WirePlumber rule that keeps the speaker at 16-bit, and the audio `modules-load.d` list. |
 | `gui/` | The Phosh systemd unit and `lavender-session-defaults`, which disables the GNOME/Phosh idle-suspend timers at session start. |
-| `mesa/` | The a5xx/FD512 2D-blit fix: prebuilt `libgallium`, rebased Mesa backport, `build-libgallium.sh`, and ABI notes. |
+| `mesa/` | The a5xx/FD512 2D-blit and GTK EGL ES-bit fixes: ABI-matched `libgallium` builds, Mesa backports, build script, and ABI notes. |
 
 ## base
 
@@ -76,13 +76,13 @@ upstream fix for the Adreno 512 2D copy that silently writes nothing. It
 breaks `glTexSubImage2D` uploads into busy textures, which appears as missing
 glyphs and black texture tiles.
 
-`mesa/libgallium-26.2.6-arch1.1.so` is the prebuilt ABI-matched library
-(`SHA256SUMS` is next to it); `rootfs/build-rootfs.sh` installs it
-automatically. `mesa/build-libgallium.sh` rebuilds it from a Mesa 26.2.6 tree
-with the required `-Dplatforms=wayland,x11` and `-Dopengl=true`, and can
-install it plus restart Phosh. See
-[`mesa/README.md`](mesa/README.md) for the ABI checks, rootfs integration,
-rollback, and evidence. This is a userspace fix; the kernel is not patched.
+`mesa/libgallium-*.so` includes ABI-matched prebuilt libraries for supported
+Mesa versions; `rootfs/build-rootfs.sh` selects the exact soname requested by
+the rootfs `libEGL_mesa`. `mesa/build-libgallium.sh` rebuilds them with
+`-Dplatforms=wayland,x11`, `-Dopengl=true`, and GLES1 disabled. The patches fix
+the a5xx 2D-blit upload loss and restore GTK's expected EGL ES renderable bit.
+See [`mesa/README.md`](mesa/README.md) for build steps, ABI checks, rollback,
+and test results. These are userspace fixes; the kernel is not patched.
 
 ## audio
 
@@ -120,9 +120,9 @@ card exists before PipeWire starts.
 
 - `phoc` compositor with `WLR_BACKENDS=drm,libinput`,
 - `LIBSEAT_BACKEND=seatd`,
-- `GSK_RENDERER=ngl`, the GL renderer: ~2.2x the text-scroll frame rate of
-  cairo on the Adreno 512 (51 fps vs 23 fps), with clean glyphs in the scroll
-  stress test; fall back to `cairo` if glyphs go missing,
+- `GSK_RENDERER=gl`, GTK 4.24's GL renderer (~2.2x the text-scroll frame rate
+  of cairo on the Adreno 512: 51 fps vs 23 fps); the patched Mesa libgallium
+  fixes the a5xx glyph corruption. GTK 4.24 renamed `ngl` to `gl`,
 - `FD_MESA_DEBUG=noubwc`, because UBWC compression corrupts Firefox/WebRender
   buffers (magenta blocks, blank pages).
 

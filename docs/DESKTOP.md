@@ -26,7 +26,7 @@ graphical.target
     ├── User=alarm, PAMName=login, TTYPath=/dev/tty1
     ├── XDG_RUNTIME_DIR=/run/user/1000
     ├── LIBSEAT_BACKEND=seatd
-    ├── GSK_RENDERER=ngl
+    ├── GSK_RENDERER=gl
     ├── FD_MESA_DEBUG=noubwc
     └── ExecStart=/usr/bin/phosh-session
 ```
@@ -88,9 +88,9 @@ whatever version `pacman -Q mesa` reports, not only the 26.2.6 shipped in the
 release image.
 
 The Adreno 512 UBWC bug affects every compositor, so keep
-`FD_MESA_DEBUG=noubwc` in all session units. `GSK_RENDERER=ngl` is a GTK
-setting; it is harmless for Qt/KDE sessions and required for GTK-based ones
-(Phosh, GNOME).
+`FD_MESA_DEBUG=noubwc` in all session units. `GSK_RENDERER=gl` selects GTK's
+GL renderer; GTK 4.24 renamed the old `ngl` setting to `gl`. It is harmless
+for Qt/KDE sessions and required for GTK-based ones (Phosh, GNOME).
 
 ## 4. Generic Wayland session unit
 

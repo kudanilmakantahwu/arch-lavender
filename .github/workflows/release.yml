@@ -37,7 +37,7 @@ jobs:
 
           **Default install boots straight into Phosh** on tty1.  SSH over USB
           and WiFi stay enabled, and getty@tty2 is kept as a text-console
-          fallback (Ctrl+Alt+F2).  The GL renderer (`GSK_RENDERER=ngl`) and
+          fallback (Ctrl+Alt+F2).  The GTK4 GL renderer (`GSK_RENDERER=gl`) and
           `FD_MESA_DEBUG=noubwc` are applied by default for the Adreno 512;
           cairo remains available as the glyph-bug fallback.
 

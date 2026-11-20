@@ -1,9 +1,11 @@
-# Mesa a5xx 2D-blit fix
+# Mesa fixes for Adreno 512 and GTK EGL
 
-This directory carries the userspace Mesa fix for the Adreno 512 (a512 /
-FD512) glyph and texture loss. **There is no kernel change**: the GPU, the
-kernel driver (`msm`), and the firmware are fine. The bug is in Mesa's a5xx
-2D blitter, so it must be fixed in `libgallium`, not in the kernel tree.
+This directory carries two userspace Mesa fixes needed on lavender. The a5xx
+2D blitter silently drops texture uploads, corrupting glyphs; separately,
+Mesa 26.3 stopped advertising `EGL_OPENGL_ES_BIT` when GLES1 is disabled, so
+GTK 4.24 could not select an EGL config and fell back to cairo. Both are fixed
+in ABI-matched `libgallium` builds. **There is no kernel change**: the GPU,
+`msm` driver, and firmware are not the cause.
 
 ## What is broken
 
@@ -22,51 +24,54 @@ The upstream fix is MR !45483:
 | `c0235ef` | freedreno/a5xx: program the 2D source and use BLIT_OP_SCALE |
 
 `c0235ef` describes the a512 no-op and switches the copy sites to
-`BLIT_OP_SCALE`. Mesa 26.2.6 and 26.2.7 do not contain it; 26.3 will.
+`BLIT_OP_SCALE`. Mesa 26.3.1 still reproduces the bug; the fix is backported
+in `patches/0001-freedreno-a5xx-2d-blit-and-hbb.patch`.
 
 The backport also carries two highest-bank-bit commits
 (`d4b6701`, `4fa3294`). They are a separate fix, but the tested lab
 `libgallium` was built with them, so they are kept in the same patch to make
 the binary reproducible.
 
-`patches/0001-freedreno-a5xx-2d-blit-and-hbb.patch` is a rebase of those five
-commits against Mesa 26.2.6. It applies cleanly with `patch -p1` or
-`git apply`.
+`patches/0001-freedreno-a5xx-2d-blit-and-hbb.patch` carries the a5xx blitter
+and highest-bank-bit fixes. `patches/0002-gallium-dri-advertise-egl-es-bit.patch`
+restores the `__DRI_API_GLES` renderable bit whenever ES2 is present. It does
+not enable GLES1 contexts: it only makes EGL expose `EGL_OPENGL_ES_BIT` configs
+so GTK's default `eglChooseConfig` request succeeds.
 
-`libgallium-26.2.6-arch1.1.so` is the prebuilt, ABI-matched library. Its
-sha256 is in `SHA256SUMS`; it is the build that passed the system-wide 3x50
-stress in `docs/FINDINGS.md`. The patch and build script are the source of
-truth; rebuild when the rootfs Mesa soname changes.
+ABI-matched prebuilt libraries are named `libgallium-<mesa ABI>.so`. The
+rootfs builder selects the exact soname its `libEGL_mesa` needs. Hashes are in
+`SHA256SUMS`; rebuild when the rootfs Mesa soname changes.
 
 ## Build the patched libgallium
 
-The build must match the distro ABI exactly. On this image Arch's
-`libEGL_mesa.so.0` needs `libgallium-26.2.6-arch1.1.so`, and it imports the
-X11/dri3 loader. Three details are easy to get wrong:
+The build must match the distro ABI exactly. The script reads the soname
+required by `/usr/lib/libEGL_mesa.so.0` (or derives `<Mesa VERSION>-arch1.1`
+when cross-building). Three details are easy to get wrong:
 
-- without setting Mesa's `VERSION` file to `26.2.6-arch1.1` the soname is
-  wrong and phoc keeps the old library; the script does this automatically;
+- Mesa's `VERSION` file must include the Arch ABI suffix, e.g.
+  `26.3.1-arch1.1`, or the library soname is wrong;
 - without `-Dplatforms=wayland,x11` the library lacks `loader_dri3_*` and
   phoc dies with `EGL_EXT_platform_base not supported`;
 - without `-Dopengl=true` the library exposes only OpenGL ES and Qt apps
-  (Angelfish) abort in `QSGRenderLoop::handleContextCreationFailure`.
+  (Angelfish) abort in `QSGRenderLoop::handleContextCreationFailure`;
+- GLES1 stays disabled as in the Arch build; `0002` fixes GTK's EGL config
+  selection without turning the obsolete GLES1 API back on.
 
 The script sets all of them:
 
 ```sh
 sudo pacman -S --needed base-devel meson ninja python-yaml
-curl -LO https://archive.mesa3d.org/mesa-26.2.6.tar.xz
-tar -xf mesa-26.2.6.tar.xz
+curl -LO https://archive.mesa3d.org/mesa-26.3.1.tar.xz
+tar -xf mesa-26.3.1.tar.xz
 
 cd arch-lavender
-./userspace/mesa/build-libgallium.sh --src ~/mesa-26.2.6 --check
-sudo ./userspace/mesa/build-libgallium.sh --src ~/mesa-26.2.6 --install
+./userspace/mesa/build-libgallium.sh --src ~/mesa-26.3.1 --check
+sudo ./userspace/mesa/build-libgallium.sh --src ~/mesa-26.3.1 --install
 ```
 
-`--install` writes the result to both
-`/usr/local/lib/patched/libgallium-26.2.6-arch1.1.so` and
-`/usr/lib/libgallium-26.2.6-arch1.1.so`, then restarts `phosh.service`.
-Without `--install` the script only writes `./libgallium-26.2.6-arch1.1.so`.
+`--install` writes the result to both `/usr/local/lib/patched/` and `/usr/lib/`
+using the ABI-matched soname, then restarts `phosh.service`. Without
+`--install` the script only writes the output library in the current directory.
 
 Verify the ABI before rebooting or handing the image to someone:
 
@@ -77,58 +82,55 @@ ldd -r /usr/lib/dri/msm_dri.so     | grep undefined
 eglinfo | grep -E 'OpenGL core profile version|OpenGL ES profile version'
 ```
 
-Expect `OpenGL core profile version: 3.1 Mesa 26.2.6-arch1.1` and
-`OpenGL ES profile version: OpenGL ES 3.1 Mesa 26.2.6-arch1.1`.
+Expect OpenGL core and OpenGL ES 3.1 version strings with the ABI version you built.
 
 ## Rootfs integration
 
-`rootfs/build-rootfs.sh` auto-detects the prebuilt
-`userspace/mesa/libgallium-*.so` and installs it into the image. To override
-it with another build:
+`rootfs/build-rootfs.sh` reads the image's `libEGL_mesa.so.0` and selects the
+matching prebuilt `userspace/mesa/libgallium-*.so`. `MESA_GALLIUM` can override
+that selection with another ABI-matched build:
 
 ```sh
-sudo MESA_GALLIUM=$PWD/libgallium-26.2.6-arch1.1.so \
+sudo MESA_GALLIUM=$PWD/libgallium-26.3.1-arch1.1.so \
     ./rootfs/build-rootfs.sh ~/lavender-assets/rootfs-arch.tar.zst ./rootfs.img
 ```
 
 The script checks that the file is AArch64, that its embedded soname matches
 its filename, and that the image's `libEGL_mesa` actually needs that soname.
 It then copies the library to both `/usr/lib` and
-`/usr/local/lib/patched`. Without a library the build prints a warning and
-the image keeps the distro Mesa, which is missing the a512 fix.
+`/usr/local/lib/patched`. If no ABI match is included, the build prints a
+warning and the image keeps distro Mesa (glyph corruption / GTK cairo fallback).
 
 `/etc/pacman.d/hooks/99-local-patches.hook` runs
 `/usr/local/sbin/reinstall-patched-libs` after a `mesa` upgrade, restoring the
 patched library as long as the soname is still the one the upgraded
-`libEGL_mesa` expects. An Arch `mesa` upgrade that changes the soname (for
-example to `26.3.x`) needs this patch rebased and the library rebuilt; the
-old file is then ignored by `libEGL_mesa`.
+`libEGL_mesa` expects. An Arch `mesa` upgrade that changes the soname needs the library rebuilt for
+the new ABI; stale libraries are ignored by `libEGL_mesa`.
 
 ## Rollback
 
 `--install` saves the first distro library it replaces as
-`/usr/local/lib/patched/libgallium-26.2.6-arch1.1.so.distro` (and does not
-overwrite that backup on later runs). To roll back:
+`/usr/local/lib/patched/<ABI library>.distro` (and never overwrites that
+backup). To roll back, restore the matching backup and restart Phosh:
 
 ```sh
-cp /usr/local/lib/patched/libgallium-26.2.6-arch1.1.so.distro \
-   /usr/lib/libgallium-26.2.6-arch1.1.so
+cp /usr/local/lib/patched/libgallium-<ABI>.so.distro \
+   /usr/lib/libgallium-<ABI>.so
 systemctl restart phosh.service
 ```
 
-The lab phone also has
-`/root/lab/backup/libgallium-26.2.6-arch1.1.so.system` from before the first
-install.
-
 ## Evidence
 
-`docs/FINDINGS.md` contains the A/B stress results, screenshots, and the
-system-wide validation. The short version: the unpatched distro library fails
-150/150 stress cycles, while this backport is clean 150/150, and Firefox
-(WebRender/FD512), glmark2, GSK glyph stress, and Angelfish render correctly.
+The original Mesa 26.2.6 backport passed 150/150 atlas stress cycles. On
+Mesa 26.3.1 the unpatched library failed all 30 test cycles. The patched 26.3.1
+build passed 30/30 with `FD512`, both through `LD_LIBRARY_PATH` and after
+installation into `/usr/lib`, without the shim. GTK's EGL probe changed from
+zero to 15 configs for its exact attribute list. A GTK4 test process using
+`GSK_RENDERER=gl` mapped `libEGL`, `libGLESv2`, and patched `libgallium` without
+renderer warnings. `ldd -r` reports no unresolved dependencies, and
+`driDestroyConfigs` is exported.
 
-The committed prebuilt is sha256
-`2e66f90e955f745a98c8fa180e83a4f912f0873e48898d42f325a9200a47808c`. A
-second build from a pristine 26.2.6 tarball with the repo patch produced a
-different BuildID but the same ABI; that artifact also passed 3x50
-(`3771d039…`). See A12 in `docs/FINDINGS.md`.
+The 26.3.1 prebuilt sha256 is
+`37a2bd628c39486638e1b141f4de00f409de8bd3e2c07e138bf201ac36815ceb`; the
+26.2.6 sha256 remains in `SHA256SUMS`. Detailed logs and the ABI investigation
+are recorded in `docs/FINDINGS.md` section E.

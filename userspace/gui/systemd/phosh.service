@@ -19,11 +19,10 @@ Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 Environment=LIBSEAT_BACKEND=seatd
 Environment=WLR_BACKENDS=drm,libinput
-# Adreno 512: the GL (ngl) renderer is ~2.2x faster than cairo on text
-# scrolling (51 fps vs 23 fps) and a 22 s scroll stress test showed no glyph
-# corruption.  Fall back to cairo if glyphs go missing again.  /etc/environment
-# sets the same value; PAM applies that on top of this unit.
-Environment=GSK_RENDERER=ngl
+# GTK 4.24 renamed the GL renderer from "ngl" to "gl".  The patched Mesa
+# libgallium fixes the a5xx 2D-blit glyph loss; cairo is only a fallback.
+# /etc/environment sets the same value for apps launched in the session.
+Environment=GSK_RENDERER=gl
 # Adreno 512 UBWC compression corrupts Firefox/WebRender buffers, producing
 # magenta blocks and blank surfaces.  Disable UBWC for the whole session.
 Environment=FD_MESA_DEBUG=noubwc

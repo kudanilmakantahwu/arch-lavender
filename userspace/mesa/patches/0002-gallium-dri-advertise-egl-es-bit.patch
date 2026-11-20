@@ -1,0 +1,32 @@
+From: kudanilmakantahwu <kudanilmakantahwu@users.noreply.github.com>
+Date: Fri, 20 Nov 2026 14:20:00 +0700
+Subject: [PATCH] gallium/dri: advertise EGL_OPENGL_ES_BIT when ES2 is present
+
+Mesa 26.3 gates GLES1 behind HAVE_OPENGL_ES_1, which the Arch build
+disables.  driCreateNewScreen2() therefore leaves max_gl_es1_version at 0
+and clears the __DRI_API_GLES bit from screen->api_mask, so
+dri2_setup_screen() no longer reports EGL_OPENGL_ES_BIT in the display's
+ClientAPIs.
+
+eglChooseConfig() treats an omitted EGL_RENDERABLE_TYPE as
+EGL_OPENGL_ES_BIT (EGL 1.5, table 3.4).  GTK 4 builds its config
+attribute list without that attribute, so with no ES_BIT config
+advertised eglChooseConfig() returns zero configs and GTK falls back to
+the cairo software renderer ("No EGL configuration available").
+
+Advertise the legacy GLES1 API bit whenever ES2 or newer is available so
+ES_BIT configs exist again.  A freedreno GLES1 context is still not
+reachable (max_gl_es1_version stays 0); the ES_BIT config is only what
+GTK needs in order to pick a real ES2/GL context.
+
+--- a/src/gallium/frontends/dri/dri_util.c
++++ b/src/gallium/frontends/dri/dri_util.c
+@@ -161,7 +161,7 @@
+        screen->api_mask |= (1 << __DRI_API_OPENGL);
+     if (screen->max_gl_core_version > 0)
+        screen->api_mask |= (1 << __DRI_API_OPENGL_CORE);
+-    if (screen->max_gl_es1_version > 0)
++    if (screen->max_gl_es1_version > 0 || screen->max_gl_es2_version > 0)
+        screen->api_mask |= (1 << __DRI_API_GLES);
+     if (screen->max_gl_es2_version > 0)
+        screen->api_mask |= (1 << __DRI_API_GLES2);

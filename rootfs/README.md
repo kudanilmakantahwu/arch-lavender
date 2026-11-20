@@ -56,7 +56,7 @@ files that must not come from the captured system:
 | `etc/fstab` | mounts `LABEL=pmOS_root` |
 | `etc/hostname` | `lave-arch` |
 | `etc/shadow`, `etc/gshadow` | documented passwords, locked system users |
-| `etc/environment` | `GSK_RENDERER=ngl` and `FD_MESA_DEBUG=noubwc` for the Adreno 512 workarounds |
+| `etc/environment` | `GSK_RENDERER=gl` and `FD_MESA_DEBUG=noubwc` for the Adreno 512 |
 | `etc/ssh/sshd_config.d/99-root-login.conf` | allow the first root login |
 | `etc/NetworkManager/conf.d/usb0.conf` | keep NetworkManager off `usb0` |
 | `etc/systemd/network/10-usb0.network` | static `172.16.42.1/24` + DHCP server |
@@ -66,16 +66,17 @@ files that must not come from the captured system:
 ## Patched Mesa (a512 2D-blit fix)
 
 The Adreno 512 in this phone loses Mesa's staging `glTexSubImage2D` uploads
-because `CP_BLIT(BLIT_OP_COPY)` is a no-op, which causes missing glyphs and
-black texture tiles. The fix is a patched userspace `libgallium`, not a
-kernel change.
+because `CP_BLIT(BLIT_OP_COPY)` is a no-op, causing missing glyphs and black
+texture tiles. Mesa 26.3 also stopped advertising `EGL_OPENGL_ES_BIT` when GLES1
+is disabled; GTK's default `eglChooseConfig` then returns no configs and falls
+back to cairo. Both fixes are in patched userspace `libgallium`, not the kernel.
 
-A prebuilt, ABI-matched library is included at
-`userspace/mesa/libgallium-26.2.6-arch1.1.so`; `build-rootfs.sh` detects it
-automatically. To use a different build, pass it explicitly:
+ABI-matched prebuilt libraries are included under `userspace/mesa/`.
+`build-rootfs.sh` selects the exact soname requested by the rootfs's
+`libEGL_mesa`. To override it, pass a matching library explicitly:
 
 ```sh
-sudo MESA_GALLIUM=/path/to/libgallium-26.2.6-arch1.1.so \
+sudo MESA_GALLIUM=/path/to/libgallium-<ABI>.so \
     ./build-rootfs.sh rootfs-arch.tar.zst rootfs.img
 ```
 
@@ -92,8 +93,9 @@ steps and ABI requirements.
 
 The image boots to `graphical.target` and starts Phosh on `tty1` as user
 `alarm`. `phosh.service` is installed from `../userspace/gui/` and carries the
-`GSK_RENDERER=ngl` and `FD_MESA_DEBUG=noubwc` settings for the Adreno 512
-(renderer speed, UBWC corruption).
+`GSK_RENDERER=gl` and `FD_MESA_DEBUG=noubwc` settings for the Adreno 512
+(GTK GL renderer, UBWC corruption). GTK 4.24 calls the GL renderer `gl`; the
+older `ngl` value is not recognized.
 
 The build:
 

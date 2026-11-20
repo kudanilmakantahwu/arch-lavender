@@ -50,7 +50,7 @@ broken or untested, and is described in the sections below.
 | Flashlight / Torch | Broken | No working LED device |
 | Cameras | Broken | — |
 | Sensors | Broken | `qcom_sns_reg` fails to load firmware |
-| Video Decoding | Partial | VP8/VP9 software decode works; H.264 via `qcom-venus` is broken |
+| Video Decoding | Partial | VP8/VP9 software decode works; `qcom-venus` H.264 decode starts but dies at stream end with `session error: event id:1001` |
 | GPS | Broken | — |
 | Suspend / Deep Sleep | Broken | s2idle enters and resumes, but the RTC wake is intermittent and every resume forces an `ath10k` firmware reload; `ath10k` and the modem share the MSS remoteproc, so the modem re-enumerates and the SIM can go missing.  The shipped sleep policy keeps it disabled (see FINDINGS.md section D) |
 | Fingerprint Sensor | Broken | — |
@@ -71,7 +71,7 @@ The image boots into Phosh:
 - `getty@tty1` disabled so it cannot fight the compositor
 - `getty@tty2` enabled for a USB-keyboard text console (SSH is the normal
   recovery path; the phone has no built-in keyboard)
-- `GSK_RENDERER=ngl` in both `/etc/environment` and the Phosh unit
+- `GSK_RENDERER=gl` in both `/etc/environment` and the Phosh unit (GTK 4.24; old `ngl` name is ignored)
 - `FD_MESA_DEBUG=noubwc` in both `/etc/environment` and the Phosh unit
 
 There is no separate text-only build and no opt-in flag. The kernel, rootfs, USB
@@ -84,9 +84,9 @@ network, and modem path are identical regardless of how the session is used.
 - Plasma Mobile 6.8.3 on `tty1` (tested 2026-11-19: KWin Wayland, plasmashell and
   the mobile shell start, SSH stays reachable; startup QML warnings are
   non-fatal). See [`DESKTOP.md`](DESKTOP.md)
-- GL renderer (`ngl`) for ~2x faster scrolling; the patched a5xx `libgallium`
-  fixes the 2D-blit glyph/texture loss (`userspace/mesa/`), while `cairo`
-  remains a temporary fallback if a program still misrenders
+- GTK4 GL renderer (`GSK_RENDERER=gl`) for ~2x faster scrolling; patched a5xx
+  `libgallium` fixes both glyph uploads and GTK's missing EGL config bit
+  (`userspace/mesa/`); `cairo` is only a temporary fallback
 - UBWC disabled for the session, so Firefox/WebRender and other GPU apps render correctly
 - Console on `tty2` with a readable 16×32 font (USB keyboard required)
 - SSH over USB RNDIS (`172.16.42.1`)

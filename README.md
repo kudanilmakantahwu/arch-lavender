@@ -49,7 +49,7 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **Suspend / Deep Sleep** | Untested | — |
 | **Fingerprint Sensor** | Broken | — |
 | **Waydroid (optional)** | Working | Not enabled by default; occasional font glitches, otherwise stable |
-| **Phosh / GUI Session** | Working | Default UI; GL renderer (`GSK_RENDERER=ngl`, ~2x faster than cairo) plus `FD_MESA_DEBUG=noubwc` for the Adreno 512 UBWC bug, see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
+| **Phosh / GUI Session** | Working | Default UI; GTK4 GL renderer (`GSK_RENDERER=gl`) with the patched a5xx `libgallium`, plus `FD_MESA_DEBUG=noubwc`; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
 | **Plasma Mobile (optional)** | Experimental | 6.8.3 starts on `tty1` (KWin + plasmashell) with non-fatal QML warnings; see [`docs/DESKTOP.md`](docs/DESKTOP.md) |
 
 Phosh is the default session. To run Plasma Mobile, GNOME, Sway, Hyprland or
@@ -130,8 +130,9 @@ Complete walkthroughs for Wi-Fi and modem setup are located in [`docs/INSTALL.md
 The default install boots to `graphical.target` and starts Phosh on `tty1`
 (phoc + stevia on-screen keyboard, user `alarm`). SSH over USB and WiFi remains enabled.
 
-The image runs the GL renderer (`GSK_RENDERER=ngl`): text scrolling reaches
-~50 fps against ~23 fps with cairo on the same 4000-line GTK4 text view.
+The image runs GTK4's GL renderer (`GSK_RENDERER=gl`): text scrolling reaches
+~50 fps against ~23 fps with cairo on the same 4000-line GTK4 text view. GTK
+4.24 renamed the renderer from `ngl` to `gl`; `ngl` is ignored with a warning.
 
 The rootfs also installs the patched a5xx `libgallium` from `userspace/mesa/`.
 An ABI-matched prebuilt library is included, and the backport plus
@@ -182,7 +183,7 @@ Phosh.
 │   └── overlay/             /etc/fstab, shadow, environment, sshd, USB networking
 ├── userspace/
 │   ├── base/                Modem/DIAG units, USB gadget, zram, helpers
-│   ├── gui/                 Phosh systemd unit (ngl renderer)
+│   ├── gui/                 Phosh systemd unit (GTK4 GL renderer)
 │   └── mesa/                a5xx 2D-blit fix: prebuilt lib, backport, build script
 ├── scripts/
 │   ├── capture-rootfs.sh    Sanitized rootfs capture (run on the phone)

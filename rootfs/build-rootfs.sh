@@ -4,11 +4,11 @@
 #
 # Usage (as root):
 #   ./build-rootfs.sh rootfs-arch.tar.zst rootfs.img
-#   MESA_GALLIUM=/path/to/libgallium-26.2.6-arch1.1.so \
+#   MESA_GALLIUM=/path/to/libgallium-<ABI>.so \
 #       ./build-rootfs.sh rootfs-arch.tar.zst rootfs.img
 #
-# MESA_GALLIUM is optional; see userspace/mesa/README.md.  Without it the
-# script also looks for userspace/mesa/libgallium-*.so.
+# MESA_GALLIUM is optional; see userspace/mesa/README.md. Without it, the
+# script selects the prebuilt matching the rootfs libEGL_mesa soname.
 #
 # Requirements on the host: tar, zstd, e2fsprogs (mkfs.ext4, e2fsck,
 # resize2fs).  android-sdk-libsparse-tools (img2simg) is optional; without
@@ -162,15 +162,18 @@ install -Dm755 "$REPO/userspace/base/bin/usb-net-debug.sh"    "$MNT/usr/local/bi
 install -Dm755 "$REPO/userspace/base/bin/zram-swap.sh"        "$MNT/usr/local/bin/zram-swap.sh"
 install -Dm644 "$REPO/userspace/base/pacman/99-local-patches.hook" "$MNT/etc/pacman.d/hooks/99-local-patches.hook"
 
-# The a512/FD512 glyph fix is a patched userspace libgallium, not a kernel
-# change. Install it when the caller passes MESA_GALLIUM or when a prebuilt
-# userspace/mesa/libgallium-*.so is present; otherwise the image keeps the
-# distro Mesa and still loses 2D-blit uploads.
+# The a512/FD512 glyph fix and GTK EGL config fix are patched userspace
+# libgallium changes, not kernel changes. Prefer the exact ABI requested by
+# this rootfs's libEGL_mesa, then fall back to an explicitly supplied or any
+# prebuilt library.
 MESA_LIB="${MESA_GALLIUM:-}"
-if [ -z "$MESA_LIB" ]; then
-    for f in "$REPO"/userspace/mesa/libgallium-*.so; do
-        [ -f "$f" ] && { MESA_LIB="$f"; break; }
-    done
+if [ -z "$MESA_LIB" ] && [ -f "$MNT/usr/lib/libEGL_mesa.so.0" ] &&
+   command -v readelf >/dev/null 2>&1; then
+    MESA_NEEDED=$(readelf -d "$MNT/usr/lib/libEGL_mesa.so.0" 2>/dev/null |
+                  sed -n 's/.*\[\(libgallium-.*\.so\)\].*/\1/p' | head -n 1)
+    if [ -n "$MESA_NEEDED" ] && [ -f "$REPO/userspace/mesa/$MESA_NEEDED" ]; then
+        MESA_LIB="$REPO/userspace/mesa/$MESA_NEEDED"
+    fi
 fi
 if [ -n "$MESA_LIB" ]; then
     [ -f "$MESA_LIB" ] || { echo "MESA_GALLIUM not found: $MESA_LIB" >&2; exit 1; }

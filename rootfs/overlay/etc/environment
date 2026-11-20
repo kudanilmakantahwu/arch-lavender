@@ -1,8 +1,7 @@
-# GTK4 renderer for the Adreno 512.  The GL (ngl) renderer scrolls text at
-# ~50 fps versus ~23 fps with cairo on this device, and a 22 s text-scroll
-# stress test with ngl showed no missing glyphs.  cairo remains the fallback
-# if glyph corruption comes back: set GSK_RENDERER=cairo and restart phosh.
-GSK_RENDERER=ngl
+# GTK4 renderer for the Adreno 512.  The GL renderer scrolls text faster than
+# cairo; Mesa's patched libgallium fixes the a5xx 2D-blit glyph corruption.
+# Use cairo only as a temporary fallback if a GTK4 app still misrenders.
+GSK_RENDERER=gl
 
 # Adreno 512 UBWC (bandwidth compression) corrupts buffers shared between
 # Firefox/WebRender and the compositor: pages render as magenta/red blocks or
