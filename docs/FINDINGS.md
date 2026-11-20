@@ -481,3 +481,36 @@ for the same cycle.  A `mute:true` / 0% entry was also restored to the speaker
 sink after the cycle-2 session (see TROUBLESHOOTING).  Keep
 `AllowSuspend=no`; the `ath10k` and modem suspend/resume paths need a
 kernel-side fix before this is worth enabling.
+
+### D1. Why WiFi *and* the modem disappear together
+
+`4080000.remoteproc` (the modem DSP, `qcom-q6v5-mss`) also hosts the WCN3990
+WLAN firmware, so an ath10k failure takes the modem down with it:
+
+- On the resume path, `wiphy_resume` returns `-110`; the ath10k firmware
+  crashes and the MSS logs `fatal error received: err_qdi.c:459:
+  EX:wlan_process ... WLAN RT:2065`, `crash detected` and reboots.  The modem
+  object is destroyed and re-created, so ModemManager re-enumerates it under a
+  new index (`Modem/1` -> `Modem/2`); while that is in flight `mmcli -L` prints
+  "No modems were found" and the SIM looks absent.
+- It does not need suspend at all.  Turning the radio off reproduced it in the
+  WiFi-off experiment: `nmcli radio wifi off` ->
+  `wlan0: deauthenticating ... by local choice (DEAUTH_LEAVING)` ->
+  `EX:wlan_process ... WLAN RT:2065` -> `remoteproc1: crash detected` ->
+  `ath10k firmware crashed` -> MSS reboot -> `No modems were found`.  A
+  "turn WiFi off before suspend" workaround is therefore counter-productive:
+  it triggers the very crash it is meant to avoid.
+
+In that WiFi-off cycle the phone recovered on its own within a few seconds:
+the MSS came back, WiFi re-associated, and the modem re-registered (Telkomsel
+LTE, `signal 84%`, IMSI read back as `Modem/2`).  The failure the user sees
+("kartu tidak kebaca") is this recovery not completing, leaving the modem
+object gone until reboot.
+
+A best-effort recovery after a resume that lost WiFi or the modem (may itself
+re-trigger one MSS restart):
+
+```sh
+nmcli radio wifi off; sleep 1; nmcli radio wifi on
+systemctl restart ModemManager
+```

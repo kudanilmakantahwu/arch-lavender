@@ -636,6 +636,29 @@ USB gadget do not always recover, so the phone can end up unreachable while it
 is still running.  Do not re-enable it just to save power; power the phone off
 instead.
 
+### WiFi and the modem disappear together (after resume or a radio toggle)
+
+`ath10k`/WCN3990 runs on the modem DSP (`4080000.remoteproc`), so a WiFi
+firmware crash also restarts the MSS and re-enumerates — or drops — the modem.
+Symptoms: `nmcli` shows `wlan0` gone, `mmcli -L` prints "No modems were found",
+and the SIM looks unreadable.  Confirm it in the kernel log:
+
+```sh
+dmesg | grep -iE 'EX:wlan_process|crash detected|ath10k.*crashed'
+```
+
+If the MSS recovered, the modem comes back under a **new index** within
+seconds; always take the index from `mmcli -L` (do not hard-code `mmcli -m 0`).
+If it did not come back, nudge the radio and the modem stack:
+
+```sh
+nmcli radio wifi off; sleep 1; nmcli radio wifi on
+systemctl restart ModemManager
+```
+
+Turning the radio off can itself trigger the crash, so use it only as a
+recovery step.  See [FINDINGS.md](FINDINGS.md) section D1.
+
 While a tone is playing, the amp registers should read (via `/dev/i2c-1`,
 `i2cset`/`i2cget` or a small script):
 

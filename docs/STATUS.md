@@ -52,7 +52,7 @@ broken or untested, and is described in the sections below.
 | Sensors | Broken | `qcom_sns_reg` fails to load firmware |
 | Video Decoding | Partial | VP8/VP9 software decode works; H.264 via `qcom-venus` is broken |
 | GPS | Broken | — |
-| Suspend / Deep Sleep | Broken | s2idle enters and resumes, but the RTC wake is intermittent (a 45 s alarm once woke ~3.9 h late; a 60 s alarm woke on time) and every resume logs `mac80211`/`clk_branch_toggle` warnings plus an `ath10k` firmware reload and a modem `remoteproc` recovery; the shipped sleep policy keeps it disabled |
+| Suspend / Deep Sleep | Broken | s2idle enters and resumes, but the RTC wake is intermittent and every resume forces an `ath10k` firmware reload; `ath10k` and the modem share the MSS remoteproc, so the modem re-enumerates and the SIM can go missing.  The shipped sleep policy keeps it disabled (see FINDINGS.md section D) |
 | Fingerprint Sensor | Broken | — |
 | Waydroid (optional) | Working | Not enabled by default; occasional font glitches, otherwise stable |
 | Phosh / GUI Session | Working | Default UI; GL renderer (~50 fps scroll vs 23 with cairo), patched a5xx `libgallium` for the 2D-blit glyph bug, and `FD_MESA_DEBUG=noubwc` for the Adreno 512 UBWC bug |
@@ -199,6 +199,7 @@ mode. Charge the phone while the system is booted.
 | --- | --- |
 | SIM not detected | Put the SIM in slot 1; `systemctl restart modem-uim-init ModemManager` |
 | Modem stuck after a failed restart | `qcom-mss-stop`, then restart `rmtfs` (never restart `rmtfs` on a live modem) |
+| WiFi and modem vanish together (after resume or a radio toggle) | they share the MSS remoteproc; the modem re-enumerates under a new `mmcli -L` index. `nmcli radio wifi off; nmcli radio wifi on; systemctl restart ModemManager` |
 | WiFi dead after a disconnect | reboot; the `0006` patch prevents the firmware crash, but a wedged device still needs a reboot |
 | ModemManager patched binary lost after upgrade | `pacman` hook restores it from `/usr/local/lib/patched/ModemManager`; if the ABI changed, rebuild it |
 | Root filesystem needs repair | the initramfs runs `e2fsck -p`, then `e2fsck -f -y` |
