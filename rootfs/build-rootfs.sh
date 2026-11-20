@@ -257,6 +257,13 @@ mkdir -p "$MNT/etc/systemd/system/graphical.target.wants"
 ln -sf /etc/systemd/system/phosh.service \
        "$MNT/etc/systemd/system/graphical.target.wants/phosh.service"
 
+# Firefox needs the mobile config out of the box: touch density, a bottom URL
+# bar, the tab counter and the shared/release theme sheets.  The payload is
+# vendored (no first-boot network) and the autoconfig file is what turns it on.
+# See userspace/firefox/README.md.
+echo "==> installing Firefox mobile config"
+sh "$REPO/userspace/firefox/install.sh" "$MNT"
+
 # systemctl --root works without booting the image.
 if command -v systemctl >/dev/null 2>&1 &&
    systemctl --root="$MNT" set-default graphical.target >/dev/null 2>&1; then
