@@ -443,3 +443,33 @@ the whole `HiFi` profile unsupported and left only `Dummy Output`.  The
 microphone therefore lives in its own `Mic` verb (`Mic.conf`); the speaker
 `HiFi` verb contains only the `Speaker` device and remains usable even when
 capture cannot be probed.
+
+## D. Suspend / s2idle (2026-11-20)
+
+The shipped sleep policy keeps suspend disabled.  Two manual `rtcwake -m mem`
+cycles on the current boot image show that s2idle is not a hard hang, but it is
+not usable either.
+
+- **Both cycles entered s2idle and resumed.**  Cycle 1 (`-s 60`): suspend
+  entry `23:15:21`, exit `23:16:54` (~93 s; the suspend path itself spends
+  ~34 s before the residency starts).  Cycle 2 (`-s 45`): entry `23:18:59`,
+  exit `03:10:54` — the RTC alarm woke ~3 h 52 min late, and `rtcwake` still
+  returned `rc=0`.  The phone was never dead; the journal kept logging.
+- **The RTC wake is unreliable.**  The hardware RTC reads 1970 and cannot be
+  set (`hwclock -w` fails with `RTC_SET_TIME ... No such device`), so the alarm
+  is programmed against a bogus clock: sometimes it fires on time, sometimes
+  hours late.  Do not use RTC wake to judge whether s2idle works.
+- **Resume is rough.**  `WARNING` at `clk_branch_toggle` (`clk-branch.c:88`)
+  and `__ieee80211_suspend` (`mac80211/pm.c:171`) on the way down;
+  `wiphy_resume` fails `-110`, the `ath10k` firmware crashes and reloads, and
+  the modem `remoteproc` crashes and recovers (`handling crash #3`).
+- **Networking does not recover.**  After the late cycle-2 wake the phone was
+  alive but unreachable: neither the USB gadget nor WiFi worked and
+  `ath10k_start` (`ath10k/mac.c:5208`) crash-looped every ~7 minutes until the
+  next reboot.
+
+Because the system stays up after the `-110`/crash, `suspend_stats` can report
+`success=1` while also reporting `last_failed_dev=phy0` and
+`last_failed_step=resume` for the same cycle.  Keep `AllowSuspend=no`; a
+kernel-side `ath10k`/USB suspend-resume fix would be needed before this is
+worth enabling.

@@ -296,8 +296,11 @@ sudo systemctl enable --now phosh.service
 - Waydroid is still optional and still needs
   `sudo pacman -S waydroid`, `sudo waydroid init`, and
   `sudo systemctl enable --now waydroid-container`.
-- Suspend must stay disabled; the shipped sleep policy blocks it because
-  s2idle does not complete on this kernel.
+- Suspend must stay disabled; the shipped sleep policy blocks it.  s2idle does
+  enter and resume, but the wake alarm is unreliable (a 45 s RTC alarm woke
+  ~3.9 h late) and after resume `ath10k` crash-loops while WiFi and the USB
+  gadget do not recover, leaving the phone unreachable.  See
+  [FINDINGS.md](FINDINGS.md) section D.
 
 ## 6. Other sessions
 
@@ -394,8 +397,9 @@ awkward on a phone.
   it if the soname changed.
 - **No sound**: `wpctl status`, then `speaker-test -c 2 -t wav`; verify the
   UCM2 files and `50-lavender-s16.conf` are still present.
-- **Suspend hangs**: the system-wide policy in
-  `/etc/systemd/sleep.conf.d/10-lavender.conf` must stay in place. Do not
+- **Suspend resuming badly**: keep the system-wide policy in
+  `/etc/systemd/sleep.conf.d/10-lavender.conf`.  s2idle resumes, but the RTC
+  wake can fire hours late and `ath10k`/USB do not always come back.  Do not
   enable suspend from the desktop's power settings.
 - **Disk full during install**: grow the root filesystem
   (`resize2fs /dev/disk/by-partlabel/userdata`) or remove unused sessions.
