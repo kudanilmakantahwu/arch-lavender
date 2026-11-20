@@ -33,9 +33,16 @@ install -Dm644 "$SRC/mobile-config-prefs.js" \
 install -Dm644 "$SRC/mobile-config-autoconfig.js" \
     "$DEST/usr/lib/firefox/mobile-config-autoconfig.js"
 
-mkdir -p "$DEST/usr/lib/mobile-config-firefox"
-cp -a "$SRC/modules/." "$DEST/usr/lib/mobile-config-firefox/"
-cp -a "$SRC/themes" "$DEST/usr/lib/mobile-config-firefox/themes"
+mkdir -p "$DEST/usr/lib/mobile-config-firefox/themes"
+# Do not use `cp -a` here: it preserves the source owner, so a build run from a
+# checkout owned by uid 1000 would leave the shipped payload owned by 1000.
+# The image must stay root-owned (setuid helpers, sshd, and pacman all care).
+cp -R "$SRC/modules/." "$DEST/usr/lib/mobile-config-firefox/"
+cp -R "$SRC/themes/." "$DEST/usr/lib/mobile-config-firefox/themes/"
+# Make the ownership deterministic when the installer runs privileged.
+if [ "$(id -u)" -eq 0 ]; then
+    chown -R 0:0 "$DEST/usr/lib/mobile-config-firefox"
+fi
 
 install -Dm644 "$(cd "$(dirname "$0")" && pwd)/metainfo/eco.nura.mobile_config_firefox.metainfo.xml" \
     "$DEST/usr/share/metainfo/eco.nura.mobile_config_firefox.metainfo.xml"

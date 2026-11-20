@@ -616,3 +616,42 @@ The live phone has the patched library installed and `GSK_RENDERER=gl` in both
 pacman hook restores the patched library after Mesa updates. The active GTK4
 smoke test loaded the GL stack. SSH over USB remains available. No video or
 sound test was played.
+
+### E4. Release image with Mesa 26.3.1 (2026-11-20)
+
+The released rootfs tarball (`rootfs-arch-7.2.3.tar.zst`) still ships
+`mesa 1:26.2.6-1`, but the device was upgraded to `mesa 1:26.3.1-1`, so the
+release image was rebuilt and then upgraded to the same Mesa 26.3.1 file set
+the phone runs. `rootfs/build-rootfs.sh` selected the ABI-matched 26.2.6
+libgallium during the base build; a post-build step then replaced the Mesa
+package files with the on-device-verified 26.3.1 set (libEGL_mesa, libGLX_mesa,
+libgbm, `dri/libdril_dri.so` plus its driver symlinks, drirc, and the pacman db
+entry), removed the 26.2.6 library and db entry, and installed the patched
+`libgallium-26.3.1-arch1.1.so` into both `/usr/lib` and
+`/usr/local/lib/patched`.
+
+Because the image now ships exactly the Mesa libraries, patched libgallium
+sha256 (`37a2bd62…`), GTK 4.24.1, and `GSK_RENDERER=gl` that were validated on
+the phone (E1), the rendering behaviour is the same as the vetted on-device
+stack. Verification of the built image (loop-mounted read-only):
+
+- `var/lib/pacman/local/mesa-1:26.3.1-1` present; no `mesa-1:26.2.6-1`.
+- `libEGL_mesa.so.0` NEEDED `libgallium-26.3.1-arch1.1.so`; no
+  `libgallium-26.2.6-arch1.1.so` anywhere.
+- active `/usr/lib/libgallium-26.3.1-arch1.1.so` sha256
+  `37a2bd628c39486638e1b141f4de00f409de8bd3e2c07e138bf201ac36815ceb`.
+- every `NEEDED` soname of `libEGL_mesa`, `libGLX_mesa`, `libgbm`,
+  `libgallium` and `dri/libdril_dri` resolves inside the image.
+- `GSK_RENDERER=gl` in `/etc/environment` and `phosh.service`.
+- Firefox payload present (`policies.json`, `mobile-config-autoconfig.js`,
+  `mobile-config-firefox/chrome.manifest`), all root-owned.
+- non-root ownership scan: 0 files outside `/home/alarm` (the Firefox installer
+  had been leaving its payload owned by uid 1000 via `cp -a`; now fixed).
+- ext4 label `pmOS_root`, clean `e2fsck`.
+
+Artifacts (local build host):
+
+| File | Size | sha256 |
+| --- | --- | --- |
+| `rootfs-7.2.3-mesa263.img` | 8.0 GiB raw | `e58c94f2262169305ac541ef4dcff7f222a34a2eb210029155084febed095ad2` |
+| `rootfs-7.2.3-mesa263.sparse.img` | 4.1 GiB sparse | `76a9d33738c343d34f051b7a79547f9a4ede7b30a04312699cacd7687931a744` |
