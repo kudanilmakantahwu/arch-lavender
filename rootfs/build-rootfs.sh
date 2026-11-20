@@ -320,6 +320,73 @@ rm -f "$MNT"/etc/ssh/ssh_host_* 2>/dev/null || true
 : > "$MNT/etc/machine-id"
 rm -f "$MNT/var/lib/systemd/random-seed" 2>/dev/null || true
 
+# Refuse to ship an image that would boot without the audio stack or that
+# cannot load the patched Mesa.  Both have silently regressed before: a rebuild
+# dropped snd-soc-sm8250.ko.zst and the speaker went quiet, and a libgallium
+# whose soname did not match libEGL_mesa made GTK fall back to cairo.  Failing
+# here is far cheaper than flashing and debugging on the phone.
+echo "==> verifying the staged image"
+verify_fail=0
+
+moddir="$MNT/usr/lib/modules/7.2.3-sdm660"
+if [ -d "$moddir" ]; then
+    for m in snd-soc-sm8250 snd-soc-max98937; do
+        if [ -z "$(find "$moddir" -name "$m.ko*" -print -quit 2>/dev/null)" ]; then
+            echo "error: $m is missing from $moddir" >&2
+            verify_fail=1
+        fi
+    done
+else
+    echo "error: no module tree at $moddir" >&2
+    verify_fail=1
+fi
+[ -f "$MNT/usr/share/alsa/ucm2/Qualcomm/lavender/HiFi.conf" ] || {
+    echo "error: the lavender UCM2 profile is missing" >&2
+    verify_fail=1
+}
+[ -f "$MNT/etc/wireplumber/wireplumber.conf.d/50-lavender-s16.conf" ] || {
+    echo "error: the WirePlumber S16LE rule is missing" >&2
+    verify_fail=1
+}
+
+# Every NEEDED soname of the shipped Mesa stack must resolve inside the image;
+# a missing one means the GL driver cannot load and the UI drops to software.
+for lib in "$MNT/usr/lib/libEGL_mesa.so.0" "$MNT/usr/lib/libgbm.so.1" \
+           "$MNT/usr/lib/dri/libdril_dri.so" "$MNT"/usr/lib/libgallium-*.so; do
+    [ -f "$lib" ] || continue
+    command -v readelf >/dev/null 2>&1 || break
+    for need in $(readelf -d "$lib" 2>/dev/null |
+                  sed -n 's/.*NEEDED.*\[\(.*\)\].*/\1/p'); do
+        if [ ! -e "$MNT/usr/lib/$need" ] && [ ! -e "$MNT/lib/$need" ]; then
+            echo "error: $need (needed by $(basename "$lib")) is missing" >&2
+            verify_fail=1
+        fi
+    done
+done
+
+grep -q '^GSK_RENDERER=gl' "$MNT/etc/environment" || {
+    echo "error: GSK_RENDERER=gl missing from /etc/environment" >&2
+    verify_fail=1
+}
+grep -q '^FD_MESA_DEBUG=noubwc' "$MNT/etc/environment" || {
+    echo "error: FD_MESA_DEBUG=noubwc missing from /etc/environment" >&2
+    verify_fail=1
+}
+grep -q 'Environment=GSK_RENDERER=gl' "$MNT/etc/systemd/system/phosh.service" || {
+    echo "error: GSK_RENDERER=gl missing from phosh.service" >&2
+    verify_fail=1
+}
+grep -q 'Environment=FD_MESA_DEBUG=noubwc' "$MNT/etc/systemd/system/phosh.service" || {
+    echo "error: FD_MESA_DEBUG=noubwc missing from phosh.service" >&2
+    verify_fail=1
+}
+
+if [ "$verify_fail" -ne 0 ]; then
+    echo "error: refusing to produce a broken image" >&2
+    exit 1
+fi
+echo "==> staged image checks passed"
+
 echo "==> unmounting"
 sync
 umount "$MNT"
