@@ -224,7 +224,7 @@ dmesg | tail -100
 ```
 
 and whether the session starts (check `systemctl status phosh` and
-`tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep -E 'GSK_RENDERER|FD_MESA_DEBUG'`).
+`tr '\0' '\n' < /proc/$(pgrep -x phosh)/environ | grep -E 'GSK_RENDERER|FD_MESA_DEBUG'`).
 For glyph/texture loss also record the Mesa ABI actually in use:
 
 ```sh

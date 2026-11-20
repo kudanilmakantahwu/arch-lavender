@@ -152,7 +152,7 @@ stay blank. If a program still renders badly, check that the variables reached
 its environment:
 
 ```sh
-tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep -E 'GSK_RENDERER|FD_MESA_DEBUG'
+tr '\0' '\n' < /proc/$(pgrep -x phosh)/environ | grep -E 'GSK_RENDERER|FD_MESA_DEBUG'
 ```
 
 `getty@tty2` stays enabled with a readable 16×32 console font

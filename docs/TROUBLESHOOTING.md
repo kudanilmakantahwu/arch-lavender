@@ -321,7 +321,7 @@ Mesa `libgallium` for the Adreno 512 2D-blit glyph bug. First verify the GL
 renderer and patched library are active:
 
 ```sh
-tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep GSK_RENDERER
+tr '\0' '\n' < /proc/$(pgrep -x phosh)/environ | grep GSK_RENDERER
 readelf -d /usr/lib/libEGL_mesa.so.0 | grep libgallium
 sha256sum /usr/lib/libgallium-*.so
 journalctl -b --no-pager | grep -E 'No EGL configuration|Failed to realize renderer'
@@ -377,7 +377,7 @@ export FD_MESA_DEBUG=noubwc
 Verify it reached the session and the app:
 
 ```sh
-tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep FD_MESA_DEBUG
+tr '\0' '\n' < /proc/$(pgrep -x phosh)/environ | grep FD_MESA_DEBUG
 # FD_MESA_DEBUG=noubwc
 tr '\0' '\n' < /proc/$(pgrep -n firefox)/environ | grep FD_MESA_DEBUG
 ```
