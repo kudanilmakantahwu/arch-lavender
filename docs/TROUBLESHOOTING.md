@@ -631,9 +631,9 @@ pactl set-sink-volume @DEFAULT_SINK@ 100%
 
 The shipped image disables automatic suspend (`sleep.conf.d` and
 `lavender-session-defaults`).  s2idle does enter and resume, but the RTC wake
-is unreliable (see [FINDINGS.md](FINDINGS.md) section D) and `ath10k`/the USB
-gadget do not always recover, so the phone can end up unreachable while it is
-still running.  Do not re-enable it just to save power; power the phone off
+is intermittent (see [FINDINGS.md](FINDINGS.md) section D) and `ath10k`/the
+USB gadget do not always recover, so the phone can end up unreachable while it
+is still running.  Do not re-enable it just to save power; power the phone off
 instead.
 
 While a tone is playing, the amp registers should read (via `/dev/i2c-1`,

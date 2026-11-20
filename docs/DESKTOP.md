@@ -297,10 +297,12 @@ sudo systemctl enable --now phosh.service
   `sudo pacman -S waydroid`, `sudo waydroid init`, and
   `sudo systemctl enable --now waydroid-container`.
 - Suspend must stay disabled; the shipped sleep policy blocks it.  s2idle does
-  enter and resume, but the wake alarm is unreliable (a 45 s RTC alarm woke
-  ~3.9 h late) and after resume `ath10k` crash-loops while WiFi and the USB
-  gadget do not recover, leaving the phone unreachable.  See
-  [FINDINGS.md](FINDINGS.md) section D.
+  enter and resume, but the RTC wake is intermittent (a 45 s alarm once woke
+  ~3.9 h late; a 60 s alarm woke on time) and every resume logs
+  `mac80211`/`clk_branch_toggle` warnings, forces an `ath10k` firmware reload
+  and a modem `remoteproc` recovery, and once left WiFi/the USB gadget down so
+  the phone was alive but unreachable.  See [FINDINGS.md](FINDINGS.md)
+  section D.
 
 ## 6. Other sessions
 
