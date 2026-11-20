@@ -655,3 +655,54 @@ Artifacts (local build host):
 | --- | --- | --- |
 | `rootfs-7.2.3-mesa263.img` | 8.0 GiB raw | `e58c94f2262169305ac541ef4dcff7f222a34a2eb210029155084febed095ad2` |
 | `rootfs-7.2.3-mesa263.sparse.img` | 4.1 GiB sparse | `76a9d33738c343d34f051b7a79547f9a4ede7b30a04312699cacd7687931a744` |
+
+### E5. Release image from the v1.2 tarball with the patched Mesa 26.2.6 (2026-11-20)
+
+`release-assets-v1.2/rootfs-arch.tar.zst` (sha256
+`a5355f24b59872c9994a2e9807d48edcc29276ddc0564e71476c1566bf09a5bb`) already
+ships `mesa 1:26.2.6-1` and `gtk4 1:4.24.1-1`, so this image needs no Mesa
+package upgrade: `libEGL_mesa.so.0` needs `libgallium-26.2.6-arch1.1.so`, and
+that ABI-matched patched build is already in `userspace/mesa/` (sha256
+`2e66f90e955f745a98c8fa180e83a4f912f0873e48898d42f325a9200a47808c`).
+`rootfs/build-rootfs.sh` selects it by reading the soname its `libEGL_mesa`
+requests and copies it to both `/usr/lib` and `/usr/local/lib/patched`. Patch
+`0001` (a5xx 2D-blit/HBB) applies on both Mesa versions; patch `0002` (advertise
+`EGL_OPENGL_ES_BIT`) is only applied on 26.3.1, because 26.2.6 still exposes the
+bit with GLES1 enabled, so GTK finds an EGL config without it.
+
+This is the first image whose build is self-checking. `rootfs/build-rootfs.sh`
+now refuses to produce an image that would regress: before unmounting it
+asserts that `snd-soc-sm8250` and `snd-soc-max98937`, the lavender UCM2 profile
+and the WirePlumber S16LE rule are present, that every `NEEDED` soname of the
+shipped Mesa stack (`libEGL_mesa`, `libgbm`, `dri/libdril_dri`, `libgallium`)
+resolves inside the image, and that `GSK_RENDERER=gl` plus
+`FD_MESA_DEBUG=noubwc` are in `/etc/environment` and `phosh.service`. A rebuild
+that had dropped `snd-soc-sm8250.ko.zst` had silently muted the speaker; the
+check turns that class of mistake into a failed build.
+
+Flashing the sparse image to `userdata` and booting confirmed the stack on
+hardware:
+
+- `phoc` (the wlroots compositor) logs `Using OpenGL ES 3.1 Mesa
+  26.2.6-arch1.1`, `GL vendor: freedreno`, `GL renderer: FD512`, `EGL driver
+  name: msm`; the process maps `libEGL_mesa`, `libGLESv2` and
+  `libgallium-26.2.6-arch1.1.so`.
+- A GTK4 application started with `GSK_RENDERER=gl` maps `libEGL_mesa` and
+  `libgallium-26.2.6-arch1.1.so` and logs no renderer fallback. Note that
+  phosh 0.57 here is a GTK3 shell, so `GSK_RENDERER` governs GTK4
+  applications (Firefox, GNOME apps), while `phoc` and the GTK4 renderer do
+  the GPU work.
+- Audio did not regress: `snd_soc_sm8250` and `snd_soc_max98937` are loaded,
+  the lavender UCM2 profile and `50-lavender-s16.conf` are installed, and
+  `AllowSuspend=no` is preserved. The speaker was confirmed working on the
+  flashed image.
+- `GSK_RENDERER=gl` and `FD_MESA_DEBUG=noubwc` are set in both
+  `/etc/environment` and `phosh.service`.
+
+Artifacts (local build host). `rootfs-v1.2-gpu.sparse.img` is the flashed,
+verified image; `rootfs-v1.2-gpu.img` is the raw counterpart.
+
+| File | Size | sha256 |
+| --- | --- | --- |
+| `rootfs-v1.2-gpu.img` | 6.0 GiB raw | `9f40cd0cb09df201aeb7b0c1b53bb5cdc1121c809a7cbc9386bb5201ac4273d1` |
+| `rootfs-v1.2-gpu.sparse.img` | 4.1 GiB sparse | `5463e065374e92bfaa763d424925ef324ff69c2c5c32bfa773ce6aa0234feff7` |
