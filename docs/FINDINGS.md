@@ -514,3 +514,30 @@ re-trigger one MSS restart):
 nmcli radio wifi off; sleep 1; nmcli radio wifi on
 systemctl restart ModemManager
 ```
+
+### D2. ath10k_snoc unbind/rebind (one cycle)
+
+Tested 2026-11-20: take `18800000.wifi` out of NetworkManager management,
+`unbind` it, suspend once, then `bind` it again on resume.
+
+- **Q1 - unbinding before suspend still restarts the MSS.**  The MSS logged
+  `fatal error received: err_qdi.c:459:EX:wlan_process:1:WLAN RT:1084` and
+  `crash detected` at the start of the run, during the pre-suspend teardown,
+  and `ath10k firmware crashed`.  We could not separate the NetworkManager
+  disconnect (`nmcli dev set wlan0 managed no`) from the `remove()`/`ath10k_stop`
+  that followed (it logged `-108` `ESHUTDOWN` failures such as
+  `failed to update channel list`), because both walk the same down path — but
+  either way, unbinding does not avoid an MSS restart, it only moves it earlier.
+- **The suspend/resume itself was clean.**  With ath10k unbound there is no
+  `wiphy_resume`, so there was no `-110`, no resume-time firmware crash, and the
+  modem did **not** re-enumerate across the suspend.  The only remaining warning
+  was `clk_branch_toggle` (`clk-branch.c:88`), which is on the display/`mdss`
+  path and unrelated to WiFi.
+- **Q2 - rebind after resume works as a recovery.**  `bind` returned `0`; `wlan0`
+  re-probed, reconnected and got an IP, and the modem stayed registered.  This is
+  the same effect as `nmcli radio wifi off/on`, i.e. a forced clean ath10k + MSS
+  restart without a reboot.
+
+Net: unbinding before suspend does not save the MSS restart and adds moving
+parts, so it is not a reason to enable suspend.  `AllowSuspend=no` stays.  The
+rebind path is useful only as a *recovery* step (TROUBLESHOOTING).

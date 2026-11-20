@@ -657,7 +657,19 @@ systemctl restart ModemManager
 ```
 
 Turning the radio off can itself trigger the crash, so use it only as a
-recovery step.  See [FINDINGS.md](FINDINGS.md) section D1.
+recovery step.  A forced driver reload does the same without a reboot (it
+restarts the MSS once, so the modem re-enumerates):
+
+```sh
+nmcli dev set wlan0 managed no
+printf '%s\n' 18800000.wifi > /sys/bus/platform/drivers/ath10k_snoc/unbind
+sleep 2
+printf '%s\n' 18800000.wifi > /sys/bus/platform/drivers/ath10k_snoc/bind
+nmcli dev set wlan0 managed yes
+nmcli radio wifi on
+```
+
+See [FINDINGS.md](FINDINGS.md) sections D1 and D2.
 
 While a tone is playing, the amp registers should read (via `/dev/i2c-1`,
 `i2cset`/`i2cget` or a small script):
