@@ -22,6 +22,9 @@ Package versions from the tested image:
 | `stevia` | `0.59.0-1` (on-screen keyboard; replaces `squeekboard`) |
 | `chatty` | `0.8.9-9` |
 | `gnome-keyring` | `1:51.1-1` (needed for Wi-Fi password prompts) |
+| `mesa` | `1:26.2.6-1` (ABI for the patched `libgallium-26.2.6-arch1.1.so`) |
+| `gtk4` | `1:4.24.1-1` (GTK4 GL renderer is `gl`) |
+| `firefox` | `159.0.1-1` |
 
 ## Feature matrix
 
@@ -33,7 +36,7 @@ broken or untested, and is described in the sections below.
 | Boot / Reboot | Working | Stable system boot |
 | Wi-Fi | Working | WCN3990 / `ath10k` (2.4 GHz & 5 GHz) |
 | Display & Touchscreen | Working | Shenchao panel only |
-| GPU (Adreno 512, a5xx) | Partial | 7.2.3 includes the upstream a5xx fixes; UBWC disabled for app compatibility |
+| GPU (Adreno 512, a5xx) | Partial | Kernel 7.2.3 carries the upstream a5xx fixes; Mesa's a5xx 2D-blit glyph bug is fixed in userspace by the patched `libgallium`; UBWC disabled for app compatibility |
 | Charging & Battery | Working | Standard charging and battery reporting work |
 | Offline Charging | Broken | System does not boot into offline charging mode |
 | Audio – Earpiece | Working | PM660L (PM8916-compatible) analog codec on internal MI2S |
@@ -71,7 +74,7 @@ The image boots into Phosh:
 - `getty@tty1` disabled so it cannot fight the compositor
 - `getty@tty2` enabled for a USB-keyboard text console (SSH is the normal
   recovery path; the phone has no built-in keyboard)
-- `GSK_RENDERER=gl` in both `/etc/environment` and the Phosh unit (GTK 4.24; old `ngl` name is ignored)
+- `GSK_RENDERER=gl` in both `/etc/environment` and the Phosh unit (GTK 4.24; old `ngl` name is ignored). This controls GTK4 apps; phosh 0.57 itself is a GTK3 shell and `phoc` renders with GLES directly.
 - `FD_MESA_DEBUG=noubwc` in both `/etc/environment` and the Phosh unit
 
 There is no separate text-only build and no opt-in flag. The kernel, rootfs, USB
@@ -84,9 +87,10 @@ network, and modem path are identical regardless of how the session is used.
 - Plasma Mobile 6.8.3 on `tty1` (tested 2026-11-19: KWin Wayland, plasmashell and
   the mobile shell start, SSH stays reachable; startup QML warnings are
   non-fatal). See [`DESKTOP.md`](DESKTOP.md)
-- GTK4 GL renderer (`GSK_RENDERER=gl`) for ~2x faster scrolling; patched a5xx
-  `libgallium` fixes both glyph uploads and GTK's missing EGL config bit
-  (`userspace/mesa/`); `cairo` is only a temporary fallback
+- GTK4 GL renderer (`GSK_RENDERER=gl`) for ~2x faster scrolling in GTK4 apps;
+  patched a5xx `libgallium` fixes both glyph uploads and GTK's missing EGL
+  config bit (`userspace/mesa/`); `cairo` is only a temporary fallback. Phosh
+  0.57 itself is GTK3, and `phoc` uses FD512 GLES for the compositor.
 - UBWC disabled for the session, so Firefox/WebRender and other GPU apps render correctly
 - Console on `tty2` with a readable 16×32 font (USB keyboard required)
 - SSH over USB RNDIS (`172.16.42.1`)
@@ -186,7 +190,6 @@ mode. Charge the phone while the system is booted.
 
 ## Not tested
 
-- Video decoding / hardware acceleration
 - Deep sleep / hibernation (`disk` state)
 - USB host / OTG
 - IR blaster

@@ -26,7 +26,7 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **Boot / Reboot** | Working | Stable system boot |
 | **Wi-Fi** | Working | WCN3990 / `ath10k` (2.4 GHz & 5 GHz) |
 | **Display & Touchscreen** | Working | — |
-| **GPU (Adreno 512, a5xx)** | Partial | 7.2.3 includes the upstream a5xx fixes |
+| **GPU (Adreno 512, a5xx)** | Partial | Kernel 7.2.3 carries the upstream a5xx fixes; Mesa's a5xx 2D-blit glyph bug is fixed in userspace by the patched `libgallium` in `userspace/mesa/` |
 | **Charging & Battery** | Working | Standard charging and battery reporting work |
 | **Offline Charging** | Broken | System does not boot into offline charging mode |
 | **Microphone, Speaker, Earpiece** | Partial | Speaker and earpiece work (UCM2 HiFi profile, MAX98937 amp; kernel pins the MultiMedia1 front end to `S16_LE`, so no userspace rule is needed on the current kernel); microphone is a separate UCM verb because its capture probe currently fails on 7.2.3. Kernel needs `CONFIG_SND_SOC_SM8250=m` |
@@ -46,10 +46,10 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **Sensors** | Broken | — |
 | **Video Decoding** | Partial | VP8/VP9 software decode works; H.264 via `qcom-venus` is broken (see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)) |
 | **GPS** | Broken | — |
-| **Suspend / Deep Sleep** | Untested | — |
+| **Suspend / Deep Sleep** | Broken | s2idle enters and resumes, but RTC wake is unreliable and resume reloads `ath10k`; automatic suspend is disabled by default (see `docs/STATUS.md` and FINDINGS section D) |
 | **Fingerprint Sensor** | Broken | — |
 | **Waydroid (optional)** | Working | Not enabled by default; occasional font glitches, otherwise stable |
-| **Phosh / GUI Session** | Working | Default UI; GTK4 GL renderer (`GSK_RENDERER=gl`) with the patched a5xx `libgallium`, plus `FD_MESA_DEBUG=noubwc`; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
+| **Phosh / GUI Session** | Working | Default UI on `phoc` (FD512, GLES 3.1); GTK4 apps use `GSK_RENDERER=gl` with the patched a5xx `libgallium`, and the session exports `FD_MESA_DEBUG=noubwc`. Phosh 0.57 itself is a GTK3 shell, so `GSK_RENDERER` governs its GTK4 apps, not the shell; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
 | **Plasma Mobile (optional)** | Experimental | 6.8.3 starts on `tty1` (KWin + plasmashell) with non-fatal QML warnings; see [`docs/DESKTOP.md`](docs/DESKTOP.md) |
 
 Phosh is the default session. To run Plasma Mobile, GNOME, Sway, Hyprland or
@@ -60,9 +60,13 @@ For detailed version history and logs, see [`docs/STATUS.md`](docs/STATUS.md);
 for the renderer/memory/governor A/B measurements and the final tuned
 defaults, see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 
-The speaker path needs the shipped WirePlumber rule that forces the ALSA sink
-to 16-bit. Without it PipeWire feeds a 24-bit front end to the 16-bit MAX98937
-backend and apps play clean audio about 48 dB too quiet; see
+On kernel `7.2.3-sdm660` from v1.2 onwards the machine driver pins the
+MultiMedia1 front end to `S16_LE` when the device tree sets
+`qcom,force-s16-fe`, so no userspace rule is needed on the current kernel. The
+image still installs the WirePlumber `S16LE` speaker rule as a fallback for
+older kernels; it is harmless with the kernel quirk. Without either, PipeWire
+feeds a 24-bit front end to the 16-bit MAX98937 backend and apps play clean
+audio about 48 dB too quiet; see
 [Speaker is clean but extremely quiet in apps](docs/TROUBLESHOOTING.md#speaker-is-clean-but-extremely-quiet-in-apps).
 
 ---
@@ -130,9 +134,12 @@ Complete walkthroughs for Wi-Fi and modem setup are located in [`docs/INSTALL.md
 The default install boots to `graphical.target` and starts Phosh on `tty1`
 (phoc + stevia on-screen keyboard, user `alarm`). SSH over USB and WiFi remains enabled.
 
-The image runs GTK4's GL renderer (`GSK_RENDERER=gl`): text scrolling reaches
-~50 fps against ~23 fps with cairo on the same 4000-line GTK4 text view. GTK
-4.24 renamed the renderer from `ngl` to `gl`; `ngl` is ignored with a warning.
+The image sets `GSK_RENDERER=gl`, which is GTK4's GL renderer. Text scrolling in
+a GTK4 app reaches ~50 fps against ~23 fps with cairo on the same 4000-line
+`GtkTextView`. GTK 4.24 renamed the renderer from `ngl` to `gl`; `ngl` is
+ignored with a warning. Phosh 0.57 itself is a GTK3 shell, so the variable
+applies to its GTK4 apps (Firefox, GNOME apps), while `phoc` renders the
+compositor with GLES directly.
 
 The rootfs also installs the patched a5xx `libgallium` from `userspace/mesa/`.
 An ABI-matched prebuilt library is included, and the backport plus
@@ -183,7 +190,7 @@ Phosh.
 │   └── overlay/             /etc/fstab, shadow, environment, sshd, USB networking
 ├── userspace/
 │   ├── base/                Modem/DIAG units, USB gadget, zram, helpers
-│   ├── gui/                 Phosh systemd unit (GTK4 GL renderer)
+│   ├── gui/                 Phosh systemd unit (GL renderer for GTK4 apps)
 │   └── mesa/                a5xx 2D-blit fix: prebuilt lib, backport, build script
 ├── scripts/
 │   ├── capture-rootfs.sh    Sanitized rootfs capture (run on the phone)

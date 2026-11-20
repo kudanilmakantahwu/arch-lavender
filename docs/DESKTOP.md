@@ -83,14 +83,15 @@ If a Mesa upgrade changes the `libgallium` soname, the old patched library no
 longer matches `libEGL_mesa` and must be rebuilt from
 [`userspace/mesa/`](../userspace/mesa/README.md). The pacman hook only
 restores a patched library whose soname is still requested by the installed
-Mesa. The tested phone had `mesa 1:26.2.7-1` installed; rebuild against
-whatever version `pacman -Q mesa` reports, not only the 26.2.6 shipped in the
-release image.
+Mesa. The tested v1.2 image ships `mesa 1:26.2.6-1`; a later `pacman -Syu` may
+install a newer version, so rebuild against whatever `pacman -Q mesa` reports,
+not only the 26.2.6 shipped in the release image.
 
 The Adreno 512 UBWC bug affects every compositor, so keep
-`FD_MESA_DEBUG=noubwc` in all session units. `GSK_RENDERER=gl` selects GTK's
-GL renderer; GTK 4.24 renamed the old `ngl` setting to `gl`. It is harmless
-for Qt/KDE sessions and required for GTK-based ones (Phosh, GNOME).
+`FD_MESA_DEBUG=noubwc` in all session units. `GSK_RENDERER=gl` selects GTK4's
+GL renderer; GTK 4.24 renamed the old `ngl` setting to `gl`. It is harmless for
+Qt/KDE sessions and matters for GTK4 apps. Phosh 0.57 itself is a GTK3 shell
+and does not read it; `phoc` renders the compositor with GLES directly.
 
 ## 4. Generic Wayland session unit
 

@@ -7,6 +7,14 @@ GTK 4.24 could not select an EGL config and fell back to cairo. Both are fixed
 in ABI-matched `libgallium` builds. **There is no kernel change**: the GPU,
 `msm` driver, and firmware are not the cause.
 
+## Which version does the release use?
+
+The v1.2 rootfs ships `mesa 1:26.2.6-1`, whose `libEGL_mesa.so.0` needs
+`libgallium-26.2.6-arch1.1.so`. On 26.2.6 only patch `0001` is applied: that
+Mesa still advertises `EGL_OPENGL_ES_BIT` with GLES1 enabled, so `0002` is not
+needed. The 26.3.1 prebuilt and patch `0002` exist for systems that upgrade to
+Mesa 26.3.x; the examples below use 26.3.1 to document that newer path.
+
 ## What is broken
 
 On a512/FD512, `CP_BLIT(BLIT_OP_COPY)` silently performs no memory write and

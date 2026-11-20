@@ -83,21 +83,39 @@ target=$(systemctl get-default 2>/dev/null || true)
 state=$(systemctl is-active phosh 2>/dev/null || true)
 [ "$state" = "active" ] && ok "phosh: active" || fail "phosh: ${state:-unknown}"
 
-for p in phoc phosh squeekboard; do
+for p in phoc phosh; do
     if pgrep -x "$p" >/dev/null 2>&1; then
         ok "session process: $p"
     else
         warn "session process not running: $p"
     fi
 done
+# The on-screen keyboard is phosh-osk-stevia (its comm is truncated to 15
+# characters, so pgrep -x does not match); older images used squeekboard.
+if pgrep -f 'phosh-osk-stevia' >/dev/null 2>&1 || pgrep -x squeekboard >/dev/null 2>&1; then
+    ok "session process: on-screen keyboard"
+else
+    warn "no on-screen keyboard process (phosh-osk-stevia)"
+fi
 
+# Resolve phosh by exact name: `pgrep -n phosh` also matches
+# phosh-osk-stevia, so it can read the keyboard's environment instead.
+PHOSH_PID=$(pgrep -x phosh 2>/dev/null | head -n1)
 # GTK 4.24's accelerated renderer is named "gl" ("ngl" is obsolete).
-gsk=$(tr '\0' '\n' < "/proc/$(pgrep -n phosh 2>/dev/null)/environ" 2>/dev/null | sed -n 's/^GSK_RENDERER=//p')
+if [ -n "$PHOSH_PID" ]; then
+    gsk=$(tr '\0' '\n' < "/proc/$PHOSH_PID/environ" 2>/dev/null | sed -n 's/^GSK_RENDERER=//p')
+else
+    gsk=""
+fi
 [ "$gsk" = "gl" ] && ok "GSK_RENDERER=gl" \
     || warn "GSK_RENDERER is '${gsk:-unset}' (expected gl; cairo is slower)"
 
 # UBWC compression corrupts Firefox/WebRender buffers on Adreno 512.
-ubwc=$(tr '\0' '\n' < "/proc/$(pgrep -n phosh 2>/dev/null)/environ" 2>/dev/null | sed -n 's/^FD_MESA_DEBUG=//p')
+if [ -n "$PHOSH_PID" ]; then
+    ubwc=$(tr '\0' '\n' < "/proc/$PHOSH_PID/environ" 2>/dev/null | sed -n 's/^FD_MESA_DEBUG=//p')
+else
+    ubwc=""
+fi
 [ "$ubwc" = "noubwc" ] && ok "FD_MESA_DEBUG=noubwc" \
     || warn "FD_MESA_DEBUG is '${ubwc:-unset}' (GPU apps may show magenta blocks)"
 
@@ -159,11 +177,13 @@ if [ -r /proc/asound/card0/id ]; then
 else
     fail "no sound card (kernel needs CONFIG_SND_SOC_SM8250=m)"
 fi
-if grep -q '^snd_soc_sm8250 ' /proc/modules 2>/dev/null; then
-    ok "snd_soc_sm8250 loaded"
-else
-    warn "snd_soc_sm8250 not loaded (speaker will not work)"
-fi
+for m in snd_soc_sm8250 snd_soc_max98937; do
+    if grep -q "^$m " /proc/modules 2>/dev/null; then
+        ok "$m loaded"
+    else
+        warn "$m not loaded (speaker will not work)"
+    fi
+done
 if [ -f /etc/wireplumber/wireplumber.conf.d/50-lavender-s16.conf ]; then
     ok "WirePlumber speaker S16LE rule installed"
 else

@@ -120,9 +120,11 @@ card exists before PipeWire starts.
 
 - `phoc` compositor with `WLR_BACKENDS=drm,libinput`,
 - `LIBSEAT_BACKEND=seatd`,
-- `GSK_RENDERER=gl`, GTK 4.24's GL renderer (~2.2x the text-scroll frame rate
-  of cairo on the Adreno 512: 51 fps vs 23 fps); the patched Mesa libgallium
-  fixes the a5xx glyph corruption. GTK 4.24 renamed `ngl` to `gl`,
+- `GSK_RENDERER=gl`, GTK 4.24's GL renderer for GTK4 apps (~2.2x the
+  text-scroll frame rate of cairo on the Adreno 512: 51 fps vs 23 fps); the
+  patched Mesa libgallium fixes the a5xx glyph corruption. GTK 4.24 renamed
+  `ngl` to `gl`. Phosh 0.57 itself is a GTK3 shell, so the variable applies to
+  its GTK4 apps rather than to `phosh`,
 - `FD_MESA_DEBUG=noubwc`, because UBWC compression corrupts Firefox/WebRender
   buffers (magenta blocks, blank pages).
 

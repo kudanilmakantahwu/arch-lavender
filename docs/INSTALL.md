@@ -551,8 +551,9 @@ the IPA data path.
   build script are in [`userspace/mesa/`](../userspace/mesa/README.md); a Mesa
   soname bump needs a rebase and rebuild.
 - Phosh is the default session. `GSK_RENDERER=gl` selects GTK 4.24's GL
-  renderer (the former `ngl` name is obsolete); see [Phosh desktop](#16-phosh-desktop)
-  and [PERFORMANCE.md](PERFORMANCE.md).
+  renderer for GTK4 apps (the former `ngl` name is obsolete); phosh 0.57 is a
+  GTK3 shell and `phoc` renders the compositor with GLES. See
+  [Phosh desktop](#16-phosh-desktop) and [PERFORMANCE.md](PERFORMANCE.md).
 
 ### Recommended package set
 
@@ -696,7 +697,7 @@ Check the session:
 ```sh
 systemctl status phosh
 pgrep -af 'phoc|phosh|phosh-osk-stevia'
-tr '\0' '\n' < /proc/$(pgrep -n phosh)/environ | grep GSK_RENDERER
+tr '\0' '\n' < /proc/$(pgrep -x phosh)/environ | grep GSK_RENDERER
 ```
 
 If text is still corrupted, make sure the variable is present, then restart:

@@ -560,8 +560,8 @@ Two independent Mesa bugs prevented the phone from rendering GTK4 through GL:
 The new `0002-gallium-dri-advertise-egl-es-bit.patch` sets the legacy GLES API
 bit whenever ES2 is available. It does **not** enable GLES1 contexts (`gles1`
 stays disabled); it only makes EGL publish the ES_BIT configs GTK expects.
-The existing LD_PRELOAD shim is retained only as a diagnostic fallback and is
-not part of the runtime fix.
+An LD_PRELOAD shim was used only during investigation; it is not part of the
+runtime fix and is not shipped in this repository or the image.
 
 ### E1. Build and verification
 
@@ -619,7 +619,12 @@ sound test was played.
 
 ### E4. Release image with Mesa 26.3.1 (2026-11-20)
 
-The released rootfs tarball (`rootfs-arch-7.2.3.tar.zst`) still ships
+> **Historical, superseded by E5.** This 26.3.1 image was not the one shipped
+> as v1.2. The release ships Mesa 26.2.6 and needs no package upgrade; the
+> artifacts below were removed during disk cleanup.
+
+The released rootfs tarball (`rootfs-arch.tar.zst`; kept locally as
+`rootfs-arch-7.2.3.tar.zst`) still ships
 `mesa 1:26.2.6-1`, but the device was upgraded to `mesa 1:26.3.1-1`, so the
 release image was rebuilt and then upgraded to the same Mesa 26.3.1 file set
 the phone runs. `rootfs/build-rootfs.sh` selected the ABI-matched 26.2.6
