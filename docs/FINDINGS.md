@@ -1153,3 +1153,70 @@ for the build/stage commands and the rollback steps.
   filtered); the gateway, `8.8.8.8` and HTTPS work. `iw reg get` again reports
   `country CN` (the AP's country IE overrides `ieee80211_regdom=ID`).
   `modprobe -r ath10k_snoc` remains unsafe (see I5).
+
+## J. Fingerprint TrustZone transport (QSEE): the vendor TA loads (2026-11-21)
+
+lavender's fingerprint is not a normal SPI/I²C sensor: the bus is owned by
+TrustZone and all imaging, feature extraction, template storage and matching run
+inside a Qualcomm-signed TA (`fpctzappfingerprint`) in QSEE. Normal world can
+only load that TA and relay commands to it. Upstream mainline `qcom_scm` gates
+QSEECOM behind an allowlist of "tested" machines, and lavender's compatible
+string is not on it, so the in-kernel driver logs
+`qseecom: untested machine, skipping`.
+
+This section records a **feasibility result only**: the out-of-tree transport
+[`nyl/linux-qseecom-mobile`](https://github.com/nyl/linux-qseecom-mobile)
+(`/dev/qseecom_mobile`; driver by Nitescu Ion Laurentiu `<contact@nyl.ro>`,
+`GPL-2.0-or-later`) reaches QSEE on lavender and loads the device's own signed
+FPC TA. It is **not** a working reader yet.
+
+### J1. What works
+
+* Kernel prerequisites are present in `7.2.3-sdm660`: `CONFIG_QCOM_SCM=y`,
+  `CONFIG_QCOM_TZMEM=y` (mode **Generic**), the `qcom_tzmem_*` symbols are
+  exported, and `CONFIG_MODULE_SIG_FORCE` is unset (an unsigned module loads and
+  taints).
+* The module builds with the exact toolchain (Clang 23.1.5, the same
+  `kbuild-edge:7.2.3` image `kernel/build.sh` uses) and gets the matching
+  `vermagic 7.2.3-sdm660`. Clang 23 needs one source fix (J2).
+* `insmod` creates `/dev/qseecom_mobile` and the driver binds to the kernel SCM
+  path: `SCM synchronization active: smc_call=__scm_smc_call scm_lock=… 
+  scm_dev=firmware:scm`. It kprobes `kallsyms_lookup_name` and reuses the
+  kernel's own `__scm_smc_call`/`qcom_scm_lock`, so it needs no allowlist entry
+  and no kernel patch.
+* The FPC TA is present in the stock `vendor.raw.img` (Xiaomi-signed):
+  `firmware/fpctzappfingerprint.mdt` + `.b00`..`.b07`. Loading it succeeds:
+
+  ```
+  qseecom_mobile: loading 'fpctzappfingerprint': mdt_len=7004 total_len=2576481 segments=8
+  qseecom_mobile: successfully loaded 'fpctzappfingerprint' with id 131074
+  ```
+
+  TrustZone verified the signature and started the TA. The driver auto-unloads
+  the app when the last fd is closed.
+
+### J2. The one build fix
+
+Clang 23 rejects passing the driver's layout-identical mirror structs
+(`struct qsee_scm_desc` / `qsee_scm_kernel_res`) to the kernel function pointer,
+which is typed with the opaque forward declarations `struct qcom_scm_desc` /
+`res`. Two explicit casts fix it. kCFI hashes the function-pointer *type*, which
+is unchanged, so the casts are safe (this is also why the driver declares the
+prototype with the kernel's own type names). The patch is kept in
+[`userspace/fingerprint/qseecom-mobile/patches`](../userspace/fingerprint/qseecom-mobile/).
+
+### J3. Remaining work
+
+The upstream repo also ships a userspace `net.reactivated.Fprint` daemon
+(`tz-qsee-fingerprintd`) with a per-device plugin vtable, but only a
+Chipone/FP4 plugin. A new **FPC plugin** is required, plus the sensor's
+reset/IRQ GPIO handling. Known blockers:
+
+* the FPC TA protocol is undocumented and must be recovered from the Android
+  vendor HAL (`vendor.qti.hardware.fingerprint@1.0.so` in the vendor image);
+* committing an enrollment needs a **Gatekeeper/HAT token** (the prior art hit
+  the same wall; `keymaster64` is not in the `vendor` image);
+* malformed TA traffic can trip the EL3 watchdog (reboot).
+
+Details, prior art and a reproduction recipe are in
+[`userspace/fingerprint/qseecom-mobile/README.md`](../userspace/fingerprint/qseecom-mobile/README.md).

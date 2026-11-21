@@ -12,6 +12,7 @@ what gets installed.
 | `gui/` | The Phosh systemd unit and `lavender-session-defaults`, which disables the GNOME/Phosh idle-suspend timers at session start. |
 | `mesa/` | The a5xx/FD512 2D-blit and GTK EGL ES-bit fixes: ABI-matched `libgallium` builds, Mesa backports, build script, and ABI notes. |
 | `firefox/` | `mobile-config-firefox` (touch UI, policies) plus `v4l2-hwdecode/`: the venus V4L2-M2M hardware-decode config (patched-ffmpeg wrapper, default prefs, build/stage scripts). |
+| `fingerprint/` | `qseecom-mobile/`: the out-of-tree Qualcomm QSEE transport (`/dev/qseecom_mobile`) that loads the vendor-signed FPC fingerprint TA into TrustZone. Feasibility only — not installed by default (see `docs/FINDINGS.md` section J). |
 
 ## base
 

@@ -47,7 +47,7 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **Video Decoding** | Working | H.264 via `qcom-venus` (GStreamer `v4l2h264dec`, ffmpeg `h264_v4l2m2m`) and VP8/VP9 software decode (see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)) |
 | **GPS** | Broken | — |
 | **Suspend / Deep Sleep** | Broken | s2idle enters and resumes, but RTC wake is unreliable and resume reloads `ath10k`; automatic suspend is disabled by default (see `docs/STATUS.md` and FINDINGS section D) |
-| **Fingerprint Sensor** | Broken | — |
+| **Fingerprint Sensor** | Partial | Transport only: the out-of-tree `qcom_qseecom_mobile` reaches QSEE and loads the vendor-signed FPC TA; a working reader still needs the FPC plugin + fprintd (see [`userspace/fingerprint/qseecom-mobile/`](userspace/fingerprint/qseecom-mobile/)) |
 | **Waydroid (optional)** | Working | Not enabled by default; occasional font glitches, otherwise stable |
 | **Phosh / GUI Session** | Working | Default UI on `phoc` (FD512, GLES 3.1); GTK4 apps use `GSK_RENDERER=gl` with the patched a5xx `libgallium`, and the session exports `FD_MESA_DEBUG=noubwc`. Phosh 0.57 itself is a GTK3 shell, so `GSK_RENDERER` governs its GTK4 apps, not the shell; see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) |
 | **Plasma Mobile (optional)** | Experimental | 6.8.3 starts on `tty1` (KWin + plasmashell) with non-fatal QML warnings; see [`docs/DESKTOP.md`](docs/DESKTOP.md) |

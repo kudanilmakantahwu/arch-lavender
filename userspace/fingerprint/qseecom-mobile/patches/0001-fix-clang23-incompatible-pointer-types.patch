@@ -1,0 +1,23 @@
+diff --git a/qcom-qseecom-mobile/qcom_qseecom_mobile.c b/qcom-qseecom-mobile/qcom_qseecom_mobile.c
+index 68514cd..e525896 100644
+--- a/qcom-qseecom-mobile/qcom_qseecom_mobile.c
++++ b/qcom-qseecom-mobile/qcom_qseecom_mobile.c
+@@ -461,9 +461,16 @@ static int qsee_smc_call(struct qsee_mobile_dev *qd,
+ 		struct qsee_scm_kernel_res kernel_res = {};
+ 		int ret;
+ 
+-		ret = qsee_kernel_scm_call(qsee_kernel_scm_dev, desc,
++		/*
++		 * qcom_scm_desc/res are opaque forward declarations here; the
++		 * local mirrors are layout-identical. kCFI hashes the
++		 * function-pointer type (unchanged), so the casts are safe.
++		 */
++		ret = qsee_kernel_scm_call(qsee_kernel_scm_dev,
++					   (const struct qcom_scm_desc *)desc,
+ 					   3 /* SMC_CONVENTION_ARM_64 */,
+-					   &kernel_res, false);
++					   (struct qcom_scm_res *)&kernel_res,
++					   false);
+ 		if (res) {
+ 			res->result = kernel_res.result[0];
+ 			res->resp_type = kernel_res.result[1];

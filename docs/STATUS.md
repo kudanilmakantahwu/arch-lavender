@@ -57,7 +57,7 @@ broken or untested, and is described in the sections below.
 | Video Decoding | Working | `qcom-venus` H.264 decode drains to end of stream (GStreamer `v4l2h264dec` and ffmpeg `h264_v4l2m2m`), fixed by [`kernel/patches/local/0003`/`0004`](../kernel/patches/local/) (FINDINGS.md section H); **Firefox decodes 1080p H.264 on venus** with the patched `rpi-ffmpeg` staged in `/opt/rpi-ffmpeg` plus a launcher wrapper (FINDINGS.md section I, [`userspace/firefox/v4l2-hwdecode`](../userspace/firefox/v4l2-hwdecode/README.md)); VP8/VP9 software decode works; a network-free 1080p60 render test is a steady 60 fps with zero-copy dmabuf (FINDINGS.md section I6) |
 | GPS | Broken | — |
 | Suspend / Deep Sleep | Broken | s2idle enters and resumes, but the RTC wake is intermittent and every resume forces an `ath10k` firmware reload; `ath10k` and the modem share the MSS remoteproc, so the modem re-enumerates and the SIM can go missing.  The shipped sleep policy keeps it disabled (see FINDINGS.md section D) |
-| Fingerprint Sensor | Broken | — |
+| Fingerprint Sensor | Partial | Transport only: the out-of-tree `qcom_qseecom_mobile` reaches QSEE and **loads the vendor-signed FPC TA** (`fpctzappfingerprint`, app id 131074); a working reader still needs the FPC userspace plugin + fprintd (FINDINGS.md section J, [`userspace/fingerprint/qseecom-mobile`](../userspace/fingerprint/qseecom-mobile/README.md)) |
 | Waydroid (optional) | Working | Not enabled by default; occasional font glitches, otherwise stable |
 | Phosh / GUI Session | Working | Default UI; GL renderer (~50 fps scroll vs 23 with cairo), patched a5xx `libgallium` for the 2D-blit glyph bug, and `FD_MESA_DEBUG=noubwc` for the Adreno 512 UBWC bug |
 
@@ -137,6 +137,12 @@ its own does not help, because there is no PCM behind it.
 
 These are present in the device tree but do not work yet: there is no working
 camera, GNSS, or fingerprint path in this kernel/rootfs combination.
+
+Fingerprint has partial progress: the out-of-tree QSEE transport
+`qcom_qseecom_mobile` reaches TrustZone and loads the device's own signed FPC TA
+(see FINDINGS.md section J and
+[`../userspace/fingerprint/qseecom-mobile`](../userspace/fingerprint/qseecom-mobile/README.md)).
+It is not in the image by default, and there is no reading/enrollment yet.
 
 Sensors are handled separately; the accelerometer, gyroscope and magnetometer
 enumerate and `monitor-sensor` reports live orientation, but the light and
