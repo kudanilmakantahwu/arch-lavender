@@ -1100,3 +1100,56 @@ for the build/stage commands and the rollback steps.
   unloading the module tears down the shared MSS (`remoteproc0`), after which
   the WCN3990 QMI handshake fails (`msa map permissions -22`, `qmi-board-id=0`)
   and WiFi only returns after a full reboot.
+
+### I6. The 1080p60 frame drops came from the stream, not the decoder or the compositor (2026-11-21)
+
+* **Symptom reproduced on YouTube.** On `FzMN8UsRF8Y` at 1080p60
+  (`avc1.64002A`, itag 299) the player decoded ~61.6 fps but reported ~51 fps
+  dropped (only ~10 fps presented) while venus was decoding. At the same time
+  the buffer was draining (23.9 s → 13.9 s in 15 s) and the connection estimate
+  was 1.2–2.0 Mbit/s, so the source could not sustain the stream.
+
+* **A network-free render test proves the decode + zero-copy compositor path is
+  good.** The same itag-299 H.264 stream was cut into a 22.6 MB DASH fragment
+  and played from `/tmp` in a private Firefox window (launcher wrapper and
+  hardware-decode prefs unchanged). Evidence:
+
+  * the RDD process held `/dev/video0` and six `/dmabuf:` fds, and the parent
+    (`Renderer`) held the imported dmabufs;
+  * `MOZ_LOG` reported `PlatformDecoderModule Broadcast support from 'RDD',
+    support=H264 SWDEC HWDEC`, `DMABufSurfaceYUV::ImportSurfaceDescriptor()`
+    and `Plane 0/1: zero-copy EGLImageTargetTexture2D succeeded`; the
+    negotiated format is linear `NV12` (`0x3231564e`), not `Q08C`;
+  * venus ran at **124 IRQ/s** with RDD CPU **11–14%**;
+  * `HTMLVideoElement.getVideoPlaybackQuality()` (rendered in the test page):
+    after the first ~10 s of startup, `decode 60.0 fps, dropped 0.0 fps,
+    shown 60.0 fps`; over ~157 s in total **9448 decoded / 764 dropped
+    (8.1%)**, almost all of it in that startup burst.
+
+  So venus plus freedreno/WebRender can present a steady 1080p60. The YouTube
+  drops are a source problem (buffer drain / late SABR chunks) plus the usual
+  first-seconds decoder fill, not a decode or compositor ceiling.
+
+* **A quality change can strand the session on software decode.** After
+  YouTube auto-downgraded 1080p→720p, the same session kept decoding in
+  software (venus IRQ 0, no `/dev/video*` open, RDD ~135% CPU). A clean restart
+  of the launcher re-engaged `H264 HWDEC` immediately. When measuring, confirm
+  that the RDD process still holds the venus node; a restart restores it.
+
+* **The WiFi link remains the fragile part.** `ath10k_snoc` firmware crashed
+  once at ~61 min uptime (`firmware crashed! (guid …)`), recovered by itself
+  (`device successfully recovered`), but `wlan0` came back `DOWN` without
+  DHCP. It was recovered **without a reboot** with:
+
+  ```sh
+  ip link set wlan0 up
+  nmcli radio wifi on
+  nmcli device set wlan0 managed yes
+  nmcli connection up "CAPING GUNUNG"   # may need a second attempt
+  ```
+
+  After that: `192.168.0.114/24`, −48 dBm, 150 Mbit/s, power save off, and a
+  22 MB `scp` moved at ~110 Mbit/s. A direct `1.1.1.1` ping still fails (ICMP
+  filtered); the gateway, `8.8.8.8` and HTTPS work. `iw reg get` again reports
+  `country CN` (the AP's country IE overrides `ieee80211_regdom=ID`).
+  `modprobe -r ath10k_snoc` remains unsafe (see I5).
