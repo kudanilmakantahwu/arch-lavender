@@ -56,6 +56,7 @@ applied on every build:
 | `0002-ASoC-qcom-sdm660-force-16-bit-front-end.patch` | pin the MultiMedia1 front end to `S16_LE` (`qcom,force-s16-fe`) |
 | `0003-media-venus-vdec-signal-EOS-with-a-real-buffer.patch` | fix `qcom-venus` H.264 drain (`session error: event id:1001`) |
 | `0004-media-venus-vdec-start-capture-after-a-seek-that-streams-CAPTURE-first.patch` | fix a decoder restart when GStreamer streams CAPTURE first |
+| `0005-drm-msm-reject-vm-bind-without-private-vm.patch` | reject `MSM_PARAM_EN_VM_BIND` and `MSM_PARAM_VA_START`/`VA_SIZE` when the GPU has no per-process page tables (fixes an Adreno 512 oops) |
 
 `0003`/`0004` are David Heidelberg's upstream venus fixes
 (lore.kernel.org, Sep 2026, message-ids
@@ -64,6 +65,17 @@ replaces the driver's fake EOS address (`0xdeadb000`) with a real DMA buffer
 because the Venus v4 firmware rejects the fake address. See
 [`FINDINGS.md`](FINDINGS.md) section H (venus) and section F (why CPU
 frequency scaling is still missing).
+
+`0005` fixes a kernel oops on the Adreno 512. `adreno_set_param()` compared
+`ctx->vm` with `gpu->vm`, but the context VM is created lazily, so `ctx->vm` is
+still `NULL` when userspace enables VM_BIND. a5xx has no `create_private_vm`,
+so the check passed, `msm_context_vm()` returned `NULL` for the
+userspace-managed VM, and the following `MSM_PARAM_VA_START` query dereferenced
+it (`adreno_get_param+0x12c`, translation fault at `0x18`, then a GPU
+hangcheck lockup). Mesa 26.2.7's Turnip driver takes exactly this path. The
+patch is a backport of upstream commits `445f3f992eb8` and `c61563d7d541`, plus
+a `NULL` check in `valid_per_process_vm()`. See
+[`FINDINGS.md`](FINDINGS.md) section L.
 
 ## Local build
 
