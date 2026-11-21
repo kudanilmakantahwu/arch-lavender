@@ -908,3 +908,61 @@ reboot
 
 SSH over USB stays up, so a broken session is never a lockout. `getty@tty2`
 is also available with Ctrl+Alt+F2 when a USB keyboard is attached.
+
+## Sensors and vibration
+
+### No sensors (no `/dev/iio:device*`)
+
+The ADSP sensor stack needs its registry. Check the kernel log:
+
+```sh
+dmesg | grep -iE 'sns_reg|smgr'
+```
+
+`qcom_sns_reg ...: error -ENOENT: qcom_sns_reg probe failed!` means
+`/lib/firmware/qcom/sensors/sns.reg` is missing. The released image ships it;
+if it was lost, restore it and reload:
+
+```sh
+modprobe -r qcom_smgr 2>/dev/null || true
+modprobe qcom_sns_reg
+modprobe qcom_smgr
+for d in /sys/bus/iio/devices/iio:device*; do echo "$d: $(cat $d/name)"; done
+```
+
+A healthy device lists `qcom-smgr-accel`, `qcom-smgr-gyro`, `qcom-smgr-mag`
+and `qcom-smgr-prox`. See
+[`../userspace/sensors/README.md`](../userspace/sensors/README.md).
+
+### `monitor-sensor` reports no light, proximity or compass
+
+Expected on this device: `iio-sensor-proxy` only reports the accelerometer
+(orientation). The STK3x3x light/proximity sensor is exposed by the kernel
+only as a *buffer* proximity channel (no `in_proximity_raw`, no
+`in_illuminance_*` channel at all), and `iio-sensor-proxy` 3.9 has no
+buffer-proximity driver, so it cannot report either. This is a kernel /
+`iio-sensor-proxy` limitation, not a configuration problem; see
+[`../userspace/sensors/README.md`](../userspace/sensors/README.md) and
+`FINDINGS.md` section G2.
+
+If instead `iio-sensor-proxy` crashes and orientation stops working
+altogether, it is the libssc backend: the stock udev rules add `ssc-light
+ssc-compass` for `/dev/fastrpc-adsp*`, but this ADSP has no SSC service (QMI
+`0x0190`), so `ssc_sensor_light_new_sync()` crashes. The shipped
+`/etc/udev/rules.d/90-iio-sensor-proxy-no-ssc.rules` clears the property for
+those nodes.
+
+### The vibrator does not react
+
+The haptics device is `/dev/input/eventN` named `spmi_haptics`:
+
+```sh
+for e in /sys/class/input/event*/device/name; do
+    printf '%s: ' "${e%/device/name}"; cat "$e"
+done
+```
+
+if it is absent, check `lsmod | grep qcom_spmi_haptics` and
+`dmesg | grep -i haptic`. Test the motor with a force-feedback client such as
+`fftest /dev/input/eventN` (a `FF_RUMBLE` effect) or the Phosh vibration
+setting.

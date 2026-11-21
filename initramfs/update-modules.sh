@@ -3,38 +3,56 @@
 # the modules from a kernel release zip.
 #
 # Usage:
-#   ./update-modules.sh <linux-<ver>-sdm660.zip> <initramfs.cpio.gz> [rootfs-mountpoint]
+#   ./update-modules.sh <linux-<ver>-sdm660.zip | modroot-dir | modules-dir> \
+#                       <initramfs.cpio.gz> [rootfs-mountpoint]
 #
 # Examples:
 #   ./update-modules.sh linux-7.2.3-sdm660.zip arch-initramfs-fsck.gz
-#   sudo ./update-modules.sh linux-7.2.3-sdm660.zip arch-initramfs-fsck.gz /mnt
+#   ./update-modules.sh kernel/out/modroot arch-initramfs-fsck.gz
+#   sudo ./update-modules.sh kernel/out/modroot arch-initramfs-fsck.gz /mnt
 #
-# The zip produced by the kernel workflow contains:
-#   modroot/usr/lib/modules/<ver>/...
-# which is exactly the layout Arch Linux uses.
+# The first argument may be:
+#   * the zip produced by the kernel workflow, containing
+#     modroot/usr/lib/modules/<ver>/..., or
+#   * the modroot directory itself (kernel/out/modroot), or
+#   * the modules directory itself (.../usr/lib/modules/<ver>).
 set -eu
 
 [ "$#" -ge 2 ] || {
-    echo "usage: $0 <kernel.zip> <initramfs.cpio.gz> [rootfs-mountpoint]" >&2
+    echo "usage: $0 <kernel.zip | modroot | modules-dir> <initramfs.cpio.gz> [rootfs-mountpoint]" >&2
     exit 2
 }
 
-ZIP=$1
+SRC=$1
 INITRD=$2
 ROOTMP=${3:-}
 
-[ -f "$ZIP" ] || { echo "kernel zip not found: $ZIP" >&2; exit 1; }
+# The script cd's into the unpacked initramfs below, so resolve everything to
+# absolute paths first (MODSRC is derived from SRC and would otherwise break).
+SRC=$(CDPATH= cd -- "$(dirname -- "$SRC")" && pwd)/$(basename -- "$SRC")
+INITRD=$(CDPATH= cd -- "$(dirname -- "$INITRD")" && pwd)/$(basename -- "$INITRD")
+if [ -n "$ROOTMP" ]; then
+    ROOTMP=$(CDPATH= cd -- "$ROOTMP" && pwd)
+fi
+
+[ -e "$SRC" ] || { echo "kernel source not found: $SRC" >&2; exit 1; }
 [ -f "$INITRD" ] || { echo "initramfs not found: $INITRD" >&2; exit 1; }
 
 TMP=$(mktemp -d)
 cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT INT TERM
 
-echo "==> extracting $ZIP"
-unzip -q "$ZIP" -d "$TMP"
-
-MODSRC=$(find "$TMP" -type d -path '*/usr/lib/modules/*' -name '[0-9]*' | head -1)
-[ -n "$MODSRC" ] || { echo "no modules directory in zip" >&2; exit 1; }
+if [ -d "$SRC" ]; then
+    echo "==> using module tree from directory $SRC"
+    MODSRC=$(find "$SRC" -type d -path '*/usr/lib/modules/*' -name '[0-9]*' -print -quit)
+    [ -n "$MODSRC" ] || MODSRC=$(find "$SRC" -maxdepth 2 -type d -name '[0-9]*-*' -print -quit)
+    [ -n "$MODSRC" ] || { echo "no modules directory under $SRC" >&2; exit 1; }
+else
+    echo "==> extracting $SRC"
+    unzip -q "$SRC" -d "$TMP"
+    MODSRC=$(find "$TMP" -type d -path '*/usr/lib/modules/*' -name '[0-9]*' | head -1)
+    [ -n "$MODSRC" ] || { echo "no modules directory in archive" >&2; exit 1; }
+fi
 KVER=$(basename "$MODSRC")
 echo "==> kernel version: $KVER"
 

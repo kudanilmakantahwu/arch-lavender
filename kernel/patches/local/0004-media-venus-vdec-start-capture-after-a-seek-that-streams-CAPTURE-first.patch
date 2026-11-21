@@ -1,0 +1,85 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: David Heidelberg <david@ixit.cz>
+Date: Mon, 28 Sep 2026 23:40:14 +0200
+Subject: [PATCH] media: venus: vdec: Start capture after a seek that streams CAPTURE first
+
+After both queues are streamed off, the decoder sits in
+VENUS_DEC_STATE_SEEK. vdec_start_capture() does nothing while OUTPUT is
+not streaming, and when OUTPUT is streamed on again, the SEEK path only
+queues the DPB buffers if the capture side was already started. So an
+application that streams on CAPTURE before OUTPUT gets a decoder that
+never receives DPB or capture buffers: the firmware consumes the
+bitstream and no frame is ever returned.
+
+The stateful decoder interface does not require either order, and
+GStreamer restarts with CAPTURE first. Finish the capture start from the
+OUTPUT SEEK path when the CAPTURE queue is already streaming, the same
+way vdec_start_capture() does in VENUS_DEC_STATE_DECODING.
+
+Assisted-by: LLM
+Signed-off-by: David Heidelberg <david@ixit.cz>
+
+---
+ drivers/media/platform/qcom/venus/vdec.c | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/platform/qcom/venus/vdec.c b/drivers/media/platform/qcom/venus/vdec.c
+index 74591c7a820f5..ae6c2fc65404b 100644
+--- a/drivers/media/platform/qcom/venus/vdec.c
++++ b/drivers/media/platform/qcom/venus/vdec.c
+@@ -1128,33 +1128,51 @@ static int vdec_start_capture(struct venus_inst *inst)
+ free_dpb_bufs:
+ 	venus_helper_free_dpb_bufs(inst);
+ err:
+ 	return ret;
+ }
+ 
+ static int vdec_start_output(struct venus_inst *inst)
+ {
++	struct vb2_queue *dst_vq;
++	bool cap_waiting;
+ 	int ret;
+ 
+ 	if (inst->codec_state == VENUS_DEC_STATE_SEEK) {
+ 		ret = venus_helper_process_initial_out_bufs(inst);
+ 		if (ret)
+ 			return ret;
+ 
+ 		if (inst->next_buf_last) {
+ 			inst->codec_state = VENUS_DEC_STATE_DRC;
+ 		} else {
+ 			inst->codec_state = VENUS_DEC_STATE_DECODING;
+ 
+-			if (inst->streamon_cap) {
++			/*
++			 * If CAPTURE was streamed on first, vdec_start_capture()
++			 * returned early because OUTPUT was not streaming, so
++			 * start the capture side from here.
++			 */
++			dst_vq = v4l2_m2m_get_dst_vq(inst->m2m_ctx);
++			cap_waiting = !inst->streamon_cap && vb2_is_streaming(dst_vq);
++
++			if (inst->streamon_cap || cap_waiting) {
+ 				ret = venus_helper_queue_dpb_bufs(inst);
+ 				if (ret)
+ 					return ret;
+ 			}
++
++			if (cap_waiting) {
++				ret = venus_helper_process_initial_cap_bufs(inst);
++				if (ret)
++					return ret;
++
++				inst->streamon_cap = 1;
++			}
+ 		}
+ 		goto done;
+ 	}
+ 
+ 	if (inst->codec_state == VENUS_DEC_STATE_INIT ||
+ 	    inst->codec_state == VENUS_DEC_STATE_CAPTURE_SETUP) {
+ 		ret = venus_helper_process_initial_out_bufs(inst);
+ 		goto done;
+
+-- 
+2.55.0

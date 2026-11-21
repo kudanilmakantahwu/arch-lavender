@@ -1,0 +1,18 @@
+# The lavender (SDM660) ADSP exposes only the legacy Sensor Manager service
+# (QMI service 0x0100) over QRTR; it does NOT expose the newer Snapdragon
+# Sensor Core / SSC service (QMI service 0x0190) that libssc talks to.
+#
+# The stock iio-sensor-proxy udev rules still add "ssc-light ssc-compass" for
+# every /dev/fastrpc-adsp* node, so iio-sensor-proxy loads its libssc backend
+# and calls ssc_sensor_light_new_sync(), which spins waiting for the missing
+# SSC service and then segfaults -- taking the whole proxy (and therefore the
+# working accelerometer/orientation) down with it.
+#
+# Clear the property for the fastrpc nodes so the SSC backend is not loaded.
+# This file must sort AFTER 80-iio-sensor-proxy.rules, hence the "90-" prefix.
+ACTION=="remove", GOTO="iio_sensor_proxy_no_ssc_end"
+
+SUBSYSTEM=="misc", KERNEL=="fastrpc-adsp*", ENV{IIO_SENSOR_PROXY_TYPE}=""
+SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp*", ENV{IIO_SENSOR_PROXY_TYPE}=""
+
+LABEL="iio_sensor_proxy_no_ssc_end"

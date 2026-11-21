@@ -213,6 +213,90 @@ if command -v amixer >/dev/null 2>&1 && amixer -c 0 info >/dev/null 2>&1; then
         || warn "Amp DSP Switch: ${dsp:-unknown} (expected off)"
 fi
 
+echo "== sensors =="
+if [ -f /lib/firmware/qcom/sensors/sns.reg ]; then
+    ok "sensor registry /lib/firmware/qcom/sensors/sns.reg present"
+else
+    warn "sensor registry missing (ADSP sensors will not come up)"
+fi
+for m in qcom_sns_reg qcom_smgr qcom_smgr_accel qcom_smgr_gyro qcom_smgr_mag qcom_smgr_prox qcom_smgr_pressure; do
+    if grep -q "^$m " /proc/modules 2>/dev/null; then
+        ok "module loaded: $m"
+    else
+        warn "module not loaded: $m (sensors may be unavailable)"
+    fi
+done
+smgr_names=$(grep -h . /sys/bus/iio/devices/iio:device*/name 2>/dev/null | grep 'qcom-smgr' | tr '\n' ' ')
+if [ -n "$smgr_names" ]; then
+    ok "SMGR IIO devices: $smgr_names"
+else
+    warn "no qcom-smgr IIO devices (sensors not enumerated)"
+fi
+[ -f /etc/udev/rules.d/90-iio-sensor-proxy-no-ssc.rules ] \
+    && ok "iio-sensor-proxy no-SSC udev rule present" \
+    || warn "no-SSC udev rule missing (iio-sensor-proxy will crash)"
+if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet iio-sensor-proxy 2>/dev/null; then
+    ok "iio-sensor-proxy is running"
+    if command -v busctl >/dev/null 2>&1; then
+        for p in HasAccelerometer HasAmbientLight HasProximity HasCompass; do
+            v=$(busctl --system get-property net.hadess.SensorProxy \
+                    /net/hadess/SensorProxy net.hadess.SensorProxy "$p" 2>/dev/null |
+                    awk '{print $2}')
+            if [ "$v" = "true" ]; then
+                ok "iio-sensor-proxy reports $p"
+            else
+                warn "iio-sensor-proxy: $p = ${v:-unavailable} (kernel driver limitation, see userspace/sensors/README.md)"
+            fi
+        done
+    fi
+else
+    warn "iio-sensor-proxy is not running (orientation/animation unavailable)"
+fi
+
+echo "== vibration =="
+hap=""
+for n in /sys/class/input/event*/device/name; do
+    [ -f "$n" ] || continue
+    grep -q '^spmi_haptics$' "$n" 2>/dev/null &&
+        hap=$(basename "$(dirname "$(dirname "$n")")")
+done
+if [ -n "$hap" ]; then
+    ok "haptics input device /dev/input/$hap"
+else
+    warn "no spmi_haptics input device (vibrator unavailable)"
+fi
+
+echo "== video decoding =="
+for m in venus_core venus_dec venus_enc; do
+    if grep -q "^$m " /proc/modules 2>/dev/null; then
+        ok "module loaded: $m"
+    else
+        warn "module not loaded: $m"
+    fi
+done
+# The venus decoder/encoder video node numbers depend on module load order
+# (on a normal boot here the decoder is /dev/video1 and the encoder is
+# /dev/video0), so identify them by capability instead of hardcoding a number.
+if command -v v4l2-ctl >/dev/null 2>&1; then
+    decdev=$(v4l2-ctl --list-devices 2>/dev/null |
+        awk '/video decoder/{getline; gsub(/[ \t\r]/,""); print; exit}')
+    encdev=$(v4l2-ctl --list-devices 2>/dev/null |
+        awk '/video encoder/{getline; gsub(/[ \t\r]/,""); print; exit}')
+else
+    decdev=""
+    encdev=""
+fi
+if [ -n "$decdev" ] && [ -e "$decdev" ]; then
+    ok "venus H.264 decoder: $decdev"
+elif [ -e /dev/video0 ] && [ -e /dev/video1 ]; then
+    ok "venus video devices present (v4l2-ctl unavailable to name them)"
+else
+    warn "venus video devices missing"
+fi
+if [ -n "$encdev" ] && [ -e "$encdev" ]; then
+    ok "venus H.264 encoder: $encdev"
+fi
+
 echo
 if [ "$OK" -eq 0 ]; then
     echo "RESULT: core checks passed (warnings: $WARN)"

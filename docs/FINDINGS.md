@@ -9,7 +9,8 @@ logs are in English; user-facing summaries are in Indonesian.
 - Mesa `1:26.2.6-1`, freedreno `FD512`, GLES 3.1.
 - Session env in phoc: `GSK_RENDERER=ngl`, `FD_MESA_DEBUG=noubwc` (no `notile`).
 - `phoc` renderer: gles2; compositor uses msm/freedreno.
-- No cpufreq policy in sysfs. Measured single-thread throughput (2 s xorshift
+- No cpufreq policy in sysfs (see section F; not fixable without the unmerged
+  CPRh/OSM/SPM patchset). Measured single-thread throughput (2 s xorshift
   loop, 3x repeatable): CPU0/5/6/7 = 98 Mops/s, CPU1-4 = 42 Mops/s.
 - GPU devfreq: simple_ondemand, 19.2 MHz - 588 MHz.
 - dpkg not used; Firefox profile prefs are in
@@ -592,6 +593,9 @@ than taking the first glob match.
 
 ### E3. qcom-venus H.264 decode (silent capability test)
 
+> **Historical; fixed by the patches in section H (2026-11-21).**  The test
+> below is what the failure looked like before the EOS fix.
+
 `/dev/video1` is `qcom-venus`'s decoder. It advertises `H264`, `VP8`, `VP9`,
 `HEVC`, `VC1`, `MPEG4`, `MPEG2`, `H263`, and `XVID` as output (compressed)
 formats and `NV12`/`Q08C` as capture formats. A 3 s 320x240 H.264 stream
@@ -711,3 +715,236 @@ verified image; `rootfs-v1.2-gpu.img` is the raw counterpart.
 | --- | --- | --- |
 | `rootfs-v1.2-gpu.img` | 6.0 GiB raw | `9f40cd0cb09df201aeb7b0c1b53bb5cdc1121c809a7cbc9386bb5201ac4273d1` |
 | `rootfs-v1.2-gpu.sparse.img` | 4.1 GiB sparse | `5463e065374e92bfaa763d424925ef324ff69c2c5c32bfa773ce6aa0234feff7` |
+
+## F. CPU frequency scaling: why it is not in this image (2026-11-21)
+
+There is no `/sys/devices/system/cpu/cpu*/cpufreq` on 7.2.3. The kernel is not
+missing a config option:
+
+```
+CONFIG_ARM_QCOM_CPUFREQ_HW=m
+CONFIG_CPU_FREQ_DEFAULT_GOV_SCHEDUTIL=y
+CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
+CONFIG_QCOM_SPM=m
+CONFIG_QCOM_CPR=m
+```
+
+`CONFIG_ARM_QCOM_CPUFREQ_HW` is already built and loaded, but it binds to
+nothing, and no OPP table exists for the CPUs:
+
+- `arch/arm64/boot/dts/qcom/sdm660.dtsi` deletes the CPU
+  `operating-points-v2` property from every CPU core
+  (`/delete-property/ operating-points-v2;`, eight times) and defines no
+  CPU OPP table, no `qcom,freq-domain`, and no `cpufreq` node at all. The only
+  OPP table left in the file is the GPU's.
+- `drivers/cpufreq/qcom-cpufreq-hw.c` matches only `qcom,cpufreq-hw`
+  (the SDM845-and-later EPSS register layout), plus the EPSS variants. SDM660
+  is an older SoC that uses the **OSM/SPM/SAW** interface, which this driver
+  does not program. There is no node in the SDM660 device tree for it to bind
+  to in any case.
+- The upstream sdm660-mainline tracker notes the missing pieces
+  (issue #33): the Core Power Reduction v3/v4/Hardened series (CPRh), the
+  `cpufreq-qcom-hw: Implement full OSM programming` series and the
+  `Implement SPM/SAW for MSM8998 and SDM6xx` series. None of these are in
+  mainline or in the `qcom-sdm660-7.2.y` tree yet; `msm8998.dtsi` (the closest
+  supported sibling) also has no `cpufreq-hw` node.
+
+Enabling CPU frequency scaling therefore means carrying a large out-of-tree
+patchset (CPRh + OSM + SPM/SAW), adding the OSM/SPM/SAW/CPR nodes and complete
+CPU OPP tables with the correct per-corner voltages to the SDM660 device tree,
+and then validating corner transitions under load. A wrong OSM or CPR
+programming raises the wrong rail voltage and can hang the SoC, so this is not
+something to guess at. It is left out of the image until the upstream series
+lands; the CPU stays at its firmware/bootloader-selected frequency.
+
+## G. Sensors and vibration: both were already in the kernel (2026-11-21)
+
+### G1. Vibrator works, the docs were stale
+
+`sdm660-xiaomi-lavender-common.dtsi` already enables `&pm660_haptics`
+(`qcom,pmi8998-haptics`, `qcom,spmi-haptics`) with an ERM actuator in
+direct-play mode:
+
+```dts
+&pm660_haptics {
+	qcom,actuator-type = <HAP_TYPE_ERM>;
+	qcom,play-mode = <HAP_PLAY_DIRECT>;
+	qcom,wave-play-rate-us = <6667>;
+	qcom,wave-shape = <HAP_WAVE_SQUARE>;
+	status = "okay";
+};
+```
+
+`CONFIG_INPUT_QCOM_SPMI_HAPTICS=m` (`qcom_spmi_haptics`) loads and registers
+`/dev/input/event4` (`spmi_haptics`). A tiny `FF_RUMBLE` client compiled on the
+device vibrated it for 1.5 s, so only the README/STATUS tables needed fixing --
+no kernel or device-tree change.
+
+### G2. Sensors needed one firmware blob
+
+`qcom_sns_reg` (`CONFIG_QCOM_SNS_REG`) failed at probe because
+`qcom/sensors/sns.reg` was absent:
+
+```
+qcom_sns_reg ...: Direct firmware load for qcom/sensors/sns.reg-xiaomi,lavender-shenchao failed with error -2
+qcom_sns_reg ...: Direct firmware load for qcom/sensors/sns.reg failed with error -2
+qcom_sns_reg ...: error -ENOENT: qcom_sns_reg probe failed!
+```
+
+`sns.reg` is a small binary registry the Android sensors HAL writes to the
+`persist` partition (`sensors/sns.reg`). It is not in the stock firmware
+(`NON-HLOS.bin` has the venus/adsp firmware, not the sensor registry), not in
+the stock `vendor`/`system` images (only the text
+`etc/sensors/sensor_def_qcomdev.conf`), and not in postmarketOS
+`firmware-xiaomi-lavender`. The device's own `persist` partition still had it.
+
+Copying that 25468-byte file
+(SHA-256 `402986feeabfdae1111bd010a9026f7a59dd05ece2748b12f121dacaf9d8f255`)
+to `/lib/firmware/qcom/sensors/sns.reg`, reloading `qcom_sns_reg` and loading
+`sns_smgr`, `qcom_smgr` and the per-sensor drivers enumerated the sensors:
+
+```
+iio:device2  qcom-smgr-prox
+iio:device3  qcom-smgr-mag
+iio:device4  qcom-smgr-gyro
+iio:device5  qcom-smgr-accel
+```
+
+The ICM20607 accelerometer, ICM20607 gyroscope, AK09918 magnetometer and
+STK3x3x light/proximity sensors were identified in `dmesg`. Reading
+`/dev/iio:device5` with the accel scan elements enabled streamed real,
+changing samples.
+
+`iio-sensor-proxy` reports the accelerometer (orientation) but not light,
+proximity or compass.  The reasons are in the driver and in iio-sensor-proxy,
+not in the registry:
+
+* `qcom_smgr.c` streams only the primary `sns_smgr` data type and
+  `qcom_smgr_prox.c` exposes it only as a buffer channel with no
+  `in_proximity_raw`; the STK3x3x secondary (ambient light) data type is
+  never exposed at all.
+* Upstream `iio-sensor-proxy` 3.9 has a polled-proximity driver but no
+  buffer-proximity driver, so the prox buffer is ignored, and no
+  `in_illuminance_*` channel exists for the light rule to match.
+* The ADSP has no SSC service (QMI `0x0190`); the stock rules still probe the
+  libssc backend for `/dev/fastrpc-adsp*`, and `ssc_sensor_light_new_sync()`
+  then crashes the whole proxy.  The udev rule shipped in
+  `userspace/sensors/udev/90-iio-sensor-proxy-no-ssc.rules` disables that
+  backend, which is what makes orientation work at all.
+
+The port ships the registry at `rootfs/firmware/qcom/sensors/sns.reg`
+(`rootfs/build-rootfs.sh` installs it and refuses to build an image without
+it), `userspace/sensors/modules-load.d/sdm660-sensors.conf`, and the udev
+rule.  See [`userspace/sensors/README.md`](../userspace/sensors/README.md).
+
+
+## H. Venus H.264 decode: EOS, and the two upstream fixes (2026-11-21)
+
+### H1. The symptom
+
+`v4l2h264dec` (`qcom-venus`, the decoder node — `/dev/video1` on the boot in
+section H4; the number depends on module load order) starts a 720p H.264
+stream but never finishes it.  A few seconds in, the driver logs
+
+```
+qcom-venus aa00000.video-codec: session error: event id:1001 (deadb000)
+```
+
+and puts both queues into an error state.  GStreamer's `poll()` then fails at
+end of stream and ffmpeg aborts.  `event id:1001` is `HFI_ERR_SESSION_FATAL`
+and `deadb000` is the buffer address the driver put in the command.
+
+### H2. Why
+
+`vdec_decoder_cmd()` implements `V4L2_DEC_CMD_STOP` by queuing an empty
+`HFI_BUFFER_INPUT` marked `HFI_BUFFERFLAG_EOS`.  The host has no real input
+buffer to name for that command, so (for everything except old IRIS2
+firmware) it used the invented address `0xdeadb000`.  The Venus v4 firmware
+on this SDM660 does not accept it -- it validates the address, finds that it
+straddles the protected/non-protected regions and rejects it:
+
+```
+IsBufferProtected(1087): VenusCoreCtrl: CP_UNKNOWN, buffer straddles CP & non-CP regions
+vDec_EmptyBuffer(1932): Invalidate buffer in ETB
+```
+
+The firmware then raises `HFI_ERR_SESSION_FATAL`.  The firmware swap that was
+suspected first is a dead end: the venus blobs in the stock `NON-HLOS.bin` are
+byte-identical to the ones the phone runs.
+
+### H3. The fixes
+
+Two of David Heidelberg's patches (lore.kernel.org, Sep 2026, message-ids
+`20260928-venus-vdec-eos-v1-1-6e9eb3ce9849@ixit.cz` and
+`...-v1-2-...`) are carried as `kernel/patches/local/0003` and `0004`:
+
+* **0003** (`media: venus: vdec: signal EOS with a real buffer`) allocates a
+  4 KiB DMA buffer (`DMA_ATTR_NO_KERNEL_MAPPING`) the first time an instance
+  is drained and uses its device address for the EOS command, so the firmware
+  gets a mapped address outside the protected regions.  It drains normally:
+  every frame is returned and the last capture buffer carries
+  `V4L2_BUF_FLAG_LAST`.  The old `NULL`-address quirk for IRIS2 is kept.
+* **0004** (`media: venus: vdec: start capture after a seek that streams
+  CAPTURE first`) finishes the capture start from the OUTPUT `SEEK` path when
+  the CAPTURE queue is already streaming.  The stateful API does not require a
+  stream-on order and GStreamer restarts with CAPTURE first; without this the
+  decoder never receives DPB or capture buffers and no frame comes out.
+
+Both are in `kernel/patches/local/` and applied on every build (see
+[`BUILD-KERNEL.md`](BUILD-KERNEL.md#local-patches)).
+
+### H4. Verification
+
+> **Fixed; supersedes E3.**
+
+On 2026-11-21 the freshly built kernel (7.2.3-sdm660 + `0003`/`0004`) was
+booted with `fastboot boot` and the freshly built modules were installed in
+`/lib/modules/7.2.3-sdm660/` (the whole 640-module tree replaced and
+`depmod -a` run, so the running kernel and modules come from the same build;
+`venus-dec.ko.zst` SHA-256
+`d5446bfd50b3862eec108f1af512c9f7cea971c80cf8d6e21bfe3d8eb3153dfa`).  A
+standard Annex-B stream was generated on the device with the software encoder:
+
+```
+ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30 -t 4 \
+    -pix_fmt yuv420p -c:v libx264 -preset ultrafast -f h264 /root/test.h264
+# 154941 bytes, Constrained Baseline, 1280x720, 120 frames
+```
+
+GStreamer (`v4l2h264dec`):
+
+```
+$ gst-launch-1.0 -e filesrc location=/root/test.h264 ! h264parse \
+      ! v4l2h264dec ! videoconvert ! fakesink sync=false
+Setting pipeline to PLAYING ...
+Got EOS from element "pipeline0".
+EOS received - stopping pipeline...
+Execution ended after 0:00:00.840324559
+$ echo $?
+0
+```
+
+ffmpeg (`h264_v4l2m2m`):
+
+```
+$ ffmpeg -c:v h264_v4l2m2m -i /root/test.h264 -f null -
+[h264_v4l2m2m] driver 'qcom-venus' on card 'Qualcomm Venus video decoder' in mplane mode
+[h264_v4l2m2m] requesting formats: output=H264/none capture=NV12/yuv420p
+frame=  120 fps=0.0 q=-0.0 Lsize=N/A ...
+$ echo $?
+0
+```
+
+Both reached end of stream cleanly.  `dmesg` was cleared before each run and
+showed no `session error`, no `event id:1001` and no `deadb000` afterwards.
+
+The decoder was `/dev/video1` and the encoder `/dev/video0` on this boot, but
+the numbering follows module load order, so `scripts/verify.sh` now names
+them with `v4l2-ctl --list-devices` instead of hardcoding a number.
+
+Regression checks on the same boot: `snd_soc_sm8250` and `snd_soc_max98937`
+loaded, the `X7` sound card was present and a PipeWire playback (`pw-play`)
+exited 0; `msm` loaded and `adreno 5000000.gpu` came up (`GPU speedbin fuse
+135`); the sensor stack enumerated (`qcom-smgr-accel/gyro/mag/prox`),
+`iio-sensor-proxy` stayed active with live orientation, and `spmi_haptics`
+registered `/dev/input/event4`.

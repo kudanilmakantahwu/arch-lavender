@@ -46,17 +46,20 @@ Video is decode-bound, not renderer-bound: the GL and cairo sessions are within
 noise, and the range across the whole session (31–41 fps) comes from cache and
 on-screen-keyboard state, not from the renderer.
 
-Hardware H.264 decode is **not** usable yet: `v4l2h264dec` (`qcom-venus`) fails
-with `session error: event id:1001` a few seconds into a 720p stream, and the
-image ships no software H.264 decoder (`gst-libav` is not installed), so H.264
-video playback currently depends on the broken venus path. VP8/VP9 decode is
-fine.
+Hardware H.264 decode works: `v4l2h264dec` (`qcom-venus`) decodes a 720p30
+H.264 stream all the way to end of stream without the old
+`session error: event id:1001`, and so does ffmpeg's `h264_v4l2m2m`. The fix
+is `kernel/patches/local/0003` ("signal EOS with a real buffer") plus `0004`
+(see FINDINGS.md section H). VP8/VP9 software decode is fine too. The image
+still ships no *software* H.264 decoder (`gst-libav` is not installed), so
+H.264 playback uses the venus hardware path.
 
 ## GPU governor A/B
 
 The kernel exposes no cpufreq policy at all (`/sys/devices/system/cpu/cpu*/cpufreq`
-does not exist), so CPU frequency scaling cannot be tested or tuned; only the
-GPU devfreq governor is available.
+does not exist; see FINDINGS.md section F for why the SDM660 OSM/SPM/CPRh
+support is missing), so CPU frequency scaling cannot be tested or tuned; only
+the GPU devfreq governor is available.
 
 | Governor | Runs | Mean | GPU zone peak | GPU max freq |
 | --- | --- | --- | --- | --- |
@@ -122,14 +125,16 @@ Temperatures during these runs stayed at 52–58 °C on the CPU/GPU zones and
 
 - **No CPU frequency scaling**: the kernel exposes no cpufreq policy, so CPU
   governor or frequency/thermal A/B testing is impossible; the CPU clock is
-  fixed by firmware.
+  fixed by firmware. Enabling it needs the unmerged CPRh + OSM + SPM/SAW
+  series and new SDM660 device-tree nodes; see FINDINGS.md section F.
 - **`phoc` touch crash**: `handle_touch_up` → `wlr_surface_get_root_surface`
   SIGSEGV in wlroots 0.20 when the surface under the finger disappears during
   the touch (app closes, keyboard hides, a job finishes). Happens with both
   renderers and is not configurable; see
   [TROUBLESHOOTING.md](TROUBLESHOOTING.md#compositor-dies-while-touching-the-screen-phoc-sigsegv).
-- **Venus H.264 decode** errors out with `session error 1001`; no software
-  H.264 decoder is installed.
+- **Venus H.264 decode works** (see FINDINGS.md section H), but no software
+  H.264 decoder is installed, so H.264 playback relies entirely on the venus
+  hardware path.
 - **In-call audio** is still unsupported (no `q6voice`/CVS driver).
 - Firefox needs ~30–40 s to settle on a 586 KB local page and peaks above
   400 % CPU; this is a Firefox/WebRender cost on this SoC, not a renderer

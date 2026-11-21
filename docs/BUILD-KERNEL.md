@@ -45,6 +45,26 @@ docker run --rm -e APPLY_PATCHES=1 ... alpine:edge sh /work/build.sh
 `0001`–`0005` come from Fabricio Akio and Dmitry Baryshkov (FROMLIST,
 Sep–Nov 2026). `0006` is from Fabricio Akio (linux-wireless, Oct 2026).
 
+## Local patches
+
+`kernel/patches/local/` holds device support that is not upstream and is
+applied on every build:
+
+| Patch | Effect |
+| --- | --- |
+| `0001-ASoC-add-MAX98937-and-enable-lavender-audio.patch` | dedicated `max98937` codec driver + lavender sound nodes |
+| `0002-ASoC-qcom-sdm660-force-16-bit-front-end.patch` | pin the MultiMedia1 front end to `S16_LE` (`qcom,force-s16-fe`) |
+| `0003-media-venus-vdec-signal-EOS-with-a-real-buffer.patch` | fix `qcom-venus` H.264 drain (`session error: event id:1001`) |
+| `0004-media-venus-vdec-start-capture-after-a-seek-that-streams-CAPTURE-first.patch` | fix a decoder restart when GStreamer streams CAPTURE first |
+
+`0003`/`0004` are David Heidelberg's upstream venus fixes
+(lore.kernel.org, Sep 2026, message-ids
+`20260928-venus-vdec-eos-v1-{1,2}-6e9eb3ce9849@ixit.cz`). Patch `0003`
+replaces the driver's fake EOS address (`0xdeadb000`) with a real DMA buffer
+because the Venus v4 firmware rejects the fake address. See
+[`FINDINGS.md`](FINDINGS.md) section H (venus) and section F (why CPU
+frequency scaling is still missing).
+
 ## Local build
 
 The build runs inside `alpine:edge` so the toolchain matches the one used for
@@ -68,7 +88,8 @@ docker run --rm \
 2. downloads the pinned commit tarball and verifies its SHA-256;
 3. applies `patches/*.patch` only when `APPLY_PATCHES=1`, then always applies
    `patches/local/*.patch` (the MAX98937 speaker-amp driver, the lavender
-   audio device-tree nodes, and the `qcom,force-s16-fe` front-end quirk);
+   audio device-tree nodes, the `qcom,force-s16-fe` front-end quirk, and the
+   two venus H.264 EOS fixes);
 4. copies the pmOS config and runs `make olddefconfig`;
 5. builds `make ARCH=arm64 LLVM=1 all Image.gz modules`;
 6. installs modules with `INSTALL_MOD_STRIP=1`;
@@ -113,9 +134,14 @@ or:
   kernel/out/boot-7.2.3-sdm660.img
 ```
 
-The shipped `initramfs/arch-initramfs-fsck.gz` already contains the
-`7.2.3-sdm660` module tree, which is what the kernel needs to bring up the
-display before the root filesystem is mounted.
+The shipped `initramfs/arch-initramfs-fsck.gz` contains the `7.2.3-sdm660`
+module tree, which is what the kernel needs to bring up the display before the
+root filesystem is mounted. When you rebuild the kernel you must refresh that
+tree, or the boot image will carry modules from a different build:
+
+```sh
+./initramfs/update-modules.sh kernel/out/modroot initramfs/arch-initramfs-fsck.gz
+```
 
 The DTB is appended to `Image.gz`, as the bootloader expects. The header
 addresses are the proven ones (see [`HARDWARE.md`](HARDWARE.md#boot-image)).
@@ -136,18 +162,22 @@ fastboot flash boot kernel/out/boot-7.2.3-sdm660.img
 fastboot reboot
 ```
 
-Install the modules into the root filesystem:
+Install the freshly built modules into the root filesystem. The kernel and its
+modules must come from the same build (kCFI), so replace the whole tree:
 
 ```sh
-unzip -q kernel/out/linux-7.2.3-sdm660.zip -d /tmp/kernel
 rm -rf /usr/lib/modules/7.2.3-sdm660
-cp -a /tmp/kernel/modroot/usr/lib/modules/7.2.3-sdm660 /usr/lib/modules/
-depmod 7.2.3-sdm660
+cp -a kernel/out/modroot/usr/lib/modules/7.2.3-sdm660 /usr/lib/modules/    # on the device
+depmod -a 7.2.3-sdm660
 ```
 
-If the kernel version string changes, update the paths accordingly. The
-initramfs also contains a copy of the modules; use
-`initramfs/update-modules.sh` to refresh it if you rebuild it.
+`rootfs/build-rootfs.sh` does the same thing when it builds a rootfs image: it
+overlays `kernel/out/modroot/usr/lib/modules/7.2.3-sdm660` over the module tree
+from the release tarball (the tarball predates the local patches and still
+carries the unpatched venus modules), then runs `depmod`. Set `KERNEL_MODULES`
+to override the path, or to an empty string to keep the tarball's modules.
+
+If the kernel version string changes, update the paths accordingly.
 
 ## GitHub Actions
 

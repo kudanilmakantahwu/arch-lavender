@@ -49,11 +49,11 @@ broken or untested, and is described in the sections below.
 | Phone Calls | Partial | Call setup works; in-call audio is unsupported (no voice-call DSP driver) |
 | Package Management | Working | `pacman` and package updates work |
 | Bluetooth | Broken | `hci0` probes, but the stack does not work |
-| Vibration | Broken | No working vibrator device |
+| Vibration | Working | PM660L `pm660_haptics` (`qcom,pmi8998-haptics`, ERM); `/dev/input/event4` |
 | Flashlight / Torch | Broken | No working LED device |
 | Cameras | Broken | — |
-| Sensors | Broken | `qcom_sns_reg` fails to load firmware |
-| Video Decoding | Partial | VP8/VP9 software decode works; `qcom-venus` H.264 decode starts but dies at stream end with `session error: event id:1001` |
+| Sensors | Partial | ADSP SMGR stack enumerates accelerometer + gyro (ICM20607), magnetometer (AK09918), light/proximity (STK3x3x); `monitor-sensor` reads the accelerometer (orientation). No light/proximity yet (kernel/iio-sensor-proxy limitation, see [`userspace/sensors/README.md`](../userspace/sensors/README.md)). Needs the shipped registry `sns.reg` |
+| Video Decoding | Working | `qcom-venus` H.264 decode drains to end of stream (GStreamer `v4l2h264dec` and ffmpeg `h264_v4l2m2m`), fixed by [`kernel/patches/local/0003`/`0004`](../kernel/patches/local/) (FINDINGS.md section H); VP8/VP9 software decode works |
 | GPS | Broken | — |
 | Suspend / Deep Sleep | Broken | s2idle enters and resumes, but the RTC wake is intermittent and every resume forces an `ath10k` firmware reload; `ath10k` and the modem share the MSS remoteproc, so the modem re-enumerates and the SIM can go missing.  The shipped sleep policy keeps it disabled (see FINDINGS.md section D) |
 | Fingerprint Sensor | Broken | — |
@@ -132,11 +132,15 @@ Supporting calls would require porting the `q6voice`/CVS driver and adding a
 `Voice Call` DAI link to the machine driver; an ALSA UCM `Voice Call` verb on
 its own does not help, because there is no PCM behind it.
 
-### Cameras, sensors, GPS, fingerprint
+### Cameras, GPS, fingerprint
 
-These are present in the device tree but do not work yet. `qcom_sns_reg`
-fails to load `qcom/sensors/sns.reg*`, and there is no working camera, GNSS, or
-fingerprint path in this kernel/rootfs combination.
+These are present in the device tree but do not work yet: there is no working
+camera, GNSS, or fingerprint path in this kernel/rootfs combination.
+
+Sensors are handled separately; the accelerometer, gyroscope and magnetometer
+enumerate and `monitor-sensor` reports live orientation, but the light and
+proximity channels are not exposed yet.  See
+[`../userspace/sensors/README.md`](../userspace/sensors/README.md).
 
 ### Audio
 
@@ -180,8 +184,15 @@ In-call audio is a separate problem; see "Phone call audio" above.
 
 ### Vibration and flashlight
 
-The device exposes only `mmc1::`, `mmc2::`, and `white:status` LEDs. There is
-no vibrator or flashlight device under `/sys/class/leds`, so both are broken.
+The vibrator is the PM660L haptics block, driven by `qcom_spmi_haptics`
+(`qcom,pmi8998-haptics`).  `sdm660-xiaomi-lavender-common.dtsi` overrides the
+generic node for an ERM actuator in direct-play mode; it appears as
+`/dev/input/event4` (`spmi_haptics`) and responds to `FF_RUMBLE`.  Test it with
+a force-feedback tool (`fftest`, `fbcli`, or the Phosh vibration setting).
+
+The flashlight still does not work: the device exposes only `mmc1::`,
+`mmc2::`, and `white:status` LEDs, and there is no flash LED node, so there is
+no torch device under `/sys/class/leds`.
 
 ### Offline charging
 

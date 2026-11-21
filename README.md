@@ -40,11 +40,11 @@ A step-by-step, actually-tested guide to running Arch Linux ARM on the Xiaomi Re
 | **PC internet over USB** | Working | `scripts/nat.sh` (NAT on the PC side) |
 | **On-device console** | Working | 16×32 font on `getty@tty2`; needs a USB/OTG keyboard |
 | **Bluetooth** | Broken | — |
-| **Vibration** | Broken | — |
+| **Vibration** | Working | PM660L haptics (`spmi_haptics`, `/dev/input/event4`) |
 | **Flashlight / Torch** | Broken | — |
 | **Cameras** | Broken | — |
-| **Sensors** | Broken | — |
-| **Video Decoding** | Partial | VP8/VP9 software decode works; H.264 via `qcom-venus` is broken (see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)) |
+| **Sensors** | Partial | Accelerometer (live orientation) via the ADSP SMGR stack; light/proximity/compass are not exposed yet -- a kernel/iio-sensor-proxy limitation (see [`userspace/sensors/`](userspace/sensors/)) |
+| **Video Decoding** | Working | H.264 via `qcom-venus` (GStreamer `v4l2h264dec`, ffmpeg `h264_v4l2m2m`) and VP8/VP9 software decode (see [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)) |
 | **GPS** | Broken | — |
 | **Suspend / Deep Sleep** | Broken | s2idle enters and resumes, but RTC wake is unreliable and resume reloads `ath10k`; automatic suspend is disabled by default (see `docs/STATUS.md` and FINDINGS section D) |
 | **Fingerprint Sensor** | Broken | — |

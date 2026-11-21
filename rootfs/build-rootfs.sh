@@ -94,6 +94,32 @@ if [ -d "$MNT/usr/lib/modules/7.2.3-sdm660" ]; then
         ! -name '7.2.3-sdm660' -exec rm -rf {} + 2>/dev/null || true
 fi
 
+# Replace the module tree from the release tarball with the modules built by
+# kernel/build.sh.  The tarball's tree predates kernel/patches/local, so it
+# still carries the unpatched venus-dec.ko and would silently undo the H.264
+# EOS fix.  KERNEL_MODULES points at the modroot produced by build.sh; set it
+# to an empty string to keep the tarball's modules.
+KERNEL_MODULES="${KERNEL_MODULES:-$REPO/kernel/out/modroot/usr/lib/modules/7.2.3-sdm660}"
+if [ -n "$KERNEL_MODULES" ]; then
+    if [ -d "$KERNEL_MODULES" ]; then
+        echo "==> overlaying freshly built modules from $KERNEL_MODULES"
+        dest="$MNT/usr/lib/modules/7.2.3-sdm660"
+        rm -rf "$dest"
+        mkdir -p "$dest"
+        cp -a "$KERNEL_MODULES/." "$dest/"
+        if command -v depmod >/dev/null 2>&1; then
+            depmod -b "$MNT" 7.2.3-sdm660
+        else
+            echo "WARNING: depmod not found; module dependencies are stale" >&2
+            echo "         (run this script in an image with kmod, e.g. the" >&2
+            echo "          kernel build container)." >&2
+        fi
+    else
+        echo "WARNING: KERNEL_MODULES=$KERNEL_MODULES not found;" >&2
+        echo "         keeping the modules from the release tarball." >&2
+    fi
+fi
+
 # The released tarball was re-packed by the sanitizer while it ran as an
 # unprivileged user with --numeric-owner, so every one of its ~112k entries --
 # and every file copied from the overlay with `cp -a` -- is owned by uid/gid
@@ -231,6 +257,19 @@ install -Dm644 "$REPO/userspace/audio/wireplumber/wireplumber.conf.d/50-lavender
 install -Dm644 "$REPO/userspace/audio/modules-load.d/sdm660-audio.conf" \
     "$MNT/etc/modules-load.d/sdm660-audio.conf"
 
+# Sensors: qcom_sns_reg hands the binary sensor registry (sns.reg, extracted
+# from this device's persist partition) to the ADSP, which then exposes the
+# SMGR service and the IIO devices.  See userspace/sensors/README.md.
+echo "==> installing sensor registry, SMGR module list, and udev rules"
+install -Dm644 "$REPO/rootfs/firmware/qcom/sensors/sns.reg" \
+    "$MNT/lib/firmware/qcom/sensors/sns.reg"
+install -Dm644 "$REPO/userspace/sensors/modules-load.d/sdm660-sensors.conf" \
+    "$MNT/etc/modules-load.d/sdm660-sensors.conf"
+# This device's ADSP has no SSC service; the rule stops iio-sensor-proxy from
+# loading the libssc backend, which crashes and takes orientation down with it.
+install -Dm644 "$REPO/userspace/sensors/udev/90-iio-sensor-proxy-no-ssc.rules" \
+    "$MNT/etc/udev/rules.d/90-iio-sensor-proxy-no-ssc.rules"
+
 # The captured image carries an asound.state with the old over-amplified
 # Digital Volume (127 = +15.75 dB), which alsa-restore would put back at boot.
 # Drop it: without a saved state the driver init values (the vendor defaults
@@ -346,6 +385,31 @@ fi
 }
 [ -f "$MNT/etc/wireplumber/wireplumber.conf.d/50-lavender-s16.conf" ] || {
     echo "error: the WirePlumber S16LE rule is missing" >&2
+    verify_fail=1
+}
+
+# The ADSP sensor stack is dead without its registry blob; a rebuild has
+# dropped it before (it lives in rootfs/firmware, not the base tarball).
+[ -f "$MNT/lib/firmware/qcom/sensors/sns.reg" ] || {
+    echo "error: the sensor registry /lib/firmware/qcom/sensors/sns.reg is missing" >&2
+    verify_fail=1
+}
+
+# The venus H.264 EOS fix lives in venus-dec.ko; a rebuild that kept the
+# release tarball's module tree would ship the unpatched module.  Require the
+# split venus modules, which only exist in the freshly built tree.
+for m in venus-core venus-dec venus-enc; do
+    if [ -z "$(find "$moddir" -name "$m.ko*" -print -quit 2>/dev/null)" ]; then
+        echo "error: $m is missing from $moddir (stale module tree?)" >&2
+        verify_fail=1
+    fi
+done
+[ -f "$MNT/usr/lib/modules/7.2.3-sdm660/modules.dep" ] || {
+    echo "error: modules.dep is missing; depmod did not run" >&2
+    verify_fail=1
+}
+[ -f "$MNT/etc/udev/rules.d/90-iio-sensor-proxy-no-ssc.rules" ] || {
+    echo "error: the iio-sensor-proxy no-SSC udev rule is missing" >&2
     verify_fail=1
 }
 
