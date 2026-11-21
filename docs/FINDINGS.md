@@ -948,3 +948,111 @@ exited 0; `msm` loaded and `adreno 5000000.gpu` came up (`GPU speedbin fuse
 135`); the sensor stack enumerated (`qcom-smgr-accel/gyro/mag/prox`),
 `iio-sensor-proxy` stayed active with live orientation, and `spmi_haptics`
 registered `/dev/input/event4`.
+
+## I. Firefox H.264 hardware decode on venus (V4L2-M2M DRM-PRIME) (2026-11-21)
+
+### I1. The symptom
+
+Firefox played 1080p H.264 with the CPU pegged (the RDD media process at
+~70%) and never touched venus: `fuser /dev/video0` was empty, and
+`MOZ_LOG="PlatformDecoderModule:5,FFmpegVideo:5"` printed
+
+```
+Got non-DRM-PRIME frame from FFmpeg V4L2
+```
+
+after which Firefox discarded the hardware frames and fell back to software.
+
+### I2. Why
+
+Firefox (159.0.1) *does* build the Linux V4L2-M2M decoder support, and its own
+probe finds the decoder (`gfxtest v4l2 -d /dev/video0` ->
+`V4L2_SUPPORTED TRUE`, capture `NV12 Q08C`, output `H264 VP80 VP90 HEVC ...`).
+The blocker is below Firefox: `FFmpegVideoDecoder::CreateImageV4L2` only
+accepts DRM-PRIME (`AV_PIX_FMT_DRM_PRIME`) frames from the stateful
+`h264_v4l2m2m` wrapper.  Upstream ffmpeg's `v4l2_m2m` always allocates
+memory-mapped capture buffers and never exports them as dmabufs, so Firefox
+logs the non-DRM-PRIME message and falls back to software (Mozilla bug
+**1852765**).
+
+venus itself is fully capable: `/dev/video0` supports `VIDIOC_EXPBUF` and
+`V4L2_MEMORY_DMABUF` (`CONFIG_DMA_SHARED_BUFFER=y`, `VIDEOBUF2_DMA_SG=m`), and
+it is the stateful M2M variant (`VIDIOC_QUERYCAP` capabilities `0x04204000`,
+no stateless SPS/PPS controls).
+
+A second blocker is the RDD (media) sandbox: without
+`MOZ_DISABLE_RDD_SANDBOX=1` the RDD child cannot open `/dev/videoN`, so the
+decoder never starts.
+
+### I3. The fix
+
+The Raspberry Pi fork `jc-kynesim/rpi-ffmpeg` implements the DRM-PRIME output
+that Firefox needs.  It is staged into an **isolated** prefix
+`/opt/rpi-ffmpeg/lib` so the distro ffmpeg (`2:9.0.2-2`, `libavcodec.so.63`)
+is never replaced:
+
+* the fork build is ffmpeg 7.1.5 (`libavcodec.so.61.19.101`);
+* Firefox's `FFmpegRuntimeLinker` tries the newest soname first
+  (`libavcodec.so.63`, then `.62`, then `.61`), so the prefix carries
+  `libavcodec.so.62` and `libavcodec.so.63` symlinks to the built
+  `libavcodec.so.61`; `LD_LIBRARY_PATH` precedes the ld.so cache, so Firefox
+  picks the patched library and nothing else in the system sees the shadows;
+* `/usr/local/bin/firefox` exports `LD_LIBRARY_PATH=/opt/rpi-ffmpeg/lib` and
+  `MOZ_DISABLE_RDD_SANDBOX=1`, then execs the real binary; a per-user desktop
+  override (`~/.local/share/applications/firefox.desktop`) points the Phosh app
+  grid at the wrapper;
+* `/usr/lib/firefox/defaults/pref/99-v4l2-hwdecode-prefs.js` sets
+  `media.hardware-video-decoding.enabled=true`,
+  `media.hardware-video-decoding.force-enabled=true` (skip the gfxInfo
+  blocklist) and `media.ffmpeg.vaapi.enabled=false`.
+
+The scripts live in `userspace/firefox/v4l2-hwdecode/`: `build-rpi-ffmpeg.sh`
+(source build), `stage-ffmpeg-rpi-pkg.sh` (offline path) and `install.sh`
+(wrapper + pref + desktop override); `rootfs/build-rootfs.sh` wires them in
+behind `RPI_FFMPEG_LIBDIR` / `RPI_FFMPEG_PKG`.
+
+> Build note: the fork's 7.1.5 tree is the branch `test/7.1.5/main`; there is
+> no `release/7.1` branch.  Because the device had no working DNS and the
+> host's GitHub throughput was ~20 KB/s, the tested libraries were taken from
+> Arch Linux ARM's `ffmpeg-rpi 7.1.5-4` package, which is built from the same
+> source.  `stage-ffmpeg-rpi-pkg.sh` reproduces exactly that staging.
+
+### I4. Verification (2026-11-21)
+
+Worked example: a YouTube stream (`aqz-KE-bpKQ`, VP9/AV1 disabled to force
+H.264) and a local 1080p30 H.264 clip, played in Firefox launched through the
+wrapper.
+
+```
+$ fuser -v /dev/video0
+/dev/video0:  alarm  22370 F...m RDD Process      # RDD holds the venus decoder
+
+$ grep -i venus /proc/interrupts                  # before -> after ~70 s
+ 191: 4422 ...   ->   191: 5129 ...               # delta ~800 IRQs
+
+$ grep libav /proc/22370/maps
+/opt/rpi-ffmpeg/lib/libavcodec.so.61.19.101       # the patched fork
+/opt/rpi-ffmpeg/lib/libavutil.so.59.39.100        # only these two are mapped
+
+$ ps -o pcpu= -p <RDD>                            # 1080p H.264
+3.0                                               # ~70% with software decode
+```
+
+`MOZ_LOG` (`FFmpegVideo:5,PlatformDecoderModule:5`) — Firefox writes
+child-process logs to `moz.log.child-<n>.moz_log`, not to the base name:
+
+```
+D/FFmpegVideo FFMPEG: Initialising V4L2-DRM FFmpeg decoder    # present
+D/FFmpegVideo FFMPEG: V4L2 FFmpeg init successful             # present
+D/FFmpegVideo FFMPEG: V4L2 Got one frame output ...           # 856 frames
+D/FFmpegVideo FFMPEG: ... h264_v4l2m2m
+D/Dmabuf VideoFrameSurface: V4L2 locking dmabuf surface ... mHWAVBuffer ...
+# "Got non-DRM-PRIME frame from FFmpeg V4L2": 0 occurrences
+```
+
+`dmesg` showed no new venus errors during playback (the `1001`/`deadb000`
+messages in the log predate the run by hours), and a `grim` screenshot of the
+session showed the video rendering normally.
+
+See [`userspace/firefox/v4l2-hwdecode/README.md`](../userspace/firefox/v4l2-hwdecode/README.md)
+for the build/stage commands and the rollback steps.

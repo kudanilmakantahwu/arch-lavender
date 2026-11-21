@@ -11,6 +11,7 @@ what gets installed.
 | `audio/` | ALSA UCM2 profile for the SDM660 sound card (speaker + microphone routing), the WirePlumber rule that keeps the speaker at 16-bit, and the audio `modules-load.d` list. |
 | `gui/` | The Phosh systemd unit and `lavender-session-defaults`, which disables the GNOME/Phosh idle-suspend timers at session start. |
 | `mesa/` | The a5xx/FD512 2D-blit and GTK EGL ES-bit fixes: ABI-matched `libgallium` builds, Mesa backports, build script, and ABI notes. |
+| `firefox/` | `mobile-config-firefox` (touch UI, policies) plus `v4l2-hwdecode/`: the venus V4L2-M2M hardware-decode config (patched-ffmpeg wrapper, default prefs, build/stage scripts). |
 
 ## base
 
@@ -131,6 +132,22 @@ card exists before PipeWire starts.
 The build enables this unit and sets `default.target` to `graphical.target`.
 `getty@tty1` is disabled; `getty@tty2` remains available as a text-console
 fallback. There is no separate experimental/headless mode.
+
+## firefox
+
+`firefox/install.sh` installs the vendored mobile-config-firefox payload (touch
+density, bottom URL bar, tab counter, theme sheets) and its autoconfig
+bootstrapper; see [`firefox/README.md`](firefox/README.md).
+
+`firefox/v4l2-hwdecode/` adds hardware H.264 decode on the `qcom-venus`
+decoder. Firefox only uses the stateful `h264_v4l2m2m` wrapper when ffmpeg
+returns DRM-PRIME (dmabuf) frames, which upstream ffmpeg does not, so a patched
+`rpi-ffmpeg` is staged into `/opt/rpi-ffmpeg` (never over `/usr/lib`) and a
+`/usr/local/bin/firefox` wrapper sets `LD_LIBRARY_PATH` and
+`MOZ_DISABLE_RDD_SANDBOX=1` for Firefox only. `rootfs/build-rootfs.sh` stages
+the libraries from `RPI_FFMPEG_LIBDIR` or the ALARM `RPI_FFMPEG_PKG` package and
+always installs the wrapper and default pref; see
+[`firefox/v4l2-hwdecode/README.md`](firefox/v4l2-hwdecode/README.md).
 
 ## Console font
 

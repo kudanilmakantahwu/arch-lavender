@@ -25,6 +25,7 @@ Package versions from the tested image:
 | `mesa` | `1:26.2.6-1` (ABI for the patched `libgallium-26.2.6-arch1.1.so`) |
 | `gtk4` | `1:4.24.1-1` (GTK4 GL renderer is `gl`) |
 | `firefox` | `159.0.1-1` |
+| `ffmpeg-rpi` | `7.1.5-4` (staged in `/opt/rpi-ffmpeg` for Firefox venus decode; the distro `ffmpeg` `2:9.0.2-2` is untouched) |
 
 ## Feature matrix
 
@@ -53,7 +54,7 @@ broken or untested, and is described in the sections below.
 | Flashlight / Torch | Broken | No working LED device |
 | Cameras | Broken | — |
 | Sensors | Partial | ADSP SMGR stack enumerates accelerometer + gyro (ICM20607), magnetometer (AK09918), light/proximity (STK3x3x); `monitor-sensor` reads the accelerometer (orientation). No light/proximity yet (kernel/iio-sensor-proxy limitation, see [`userspace/sensors/README.md`](../userspace/sensors/README.md)). Needs the shipped registry `sns.reg` |
-| Video Decoding | Working | `qcom-venus` H.264 decode drains to end of stream (GStreamer `v4l2h264dec` and ffmpeg `h264_v4l2m2m`), fixed by [`kernel/patches/local/0003`/`0004`](../kernel/patches/local/) (FINDINGS.md section H); VP8/VP9 software decode works |
+| Video Decoding | Working | `qcom-venus` H.264 decode drains to end of stream (GStreamer `v4l2h264dec` and ffmpeg `h264_v4l2m2m`), fixed by [`kernel/patches/local/0003`/`0004`](../kernel/patches/local/) (FINDINGS.md section H); **Firefox decodes 1080p H.264 on venus** with the patched `rpi-ffmpeg` staged in `/opt/rpi-ffmpeg` plus a launcher wrapper (FINDINGS.md section I, [`userspace/firefox/v4l2-hwdecode`](../userspace/firefox/v4l2-hwdecode/README.md)); VP8/VP9 software decode works |
 | GPS | Broken | — |
 | Suspend / Deep Sleep | Broken | s2idle enters and resumes, but the RTC wake is intermittent and every resume forces an `ath10k` firmware reload; `ath10k` and the modem share the MSS remoteproc, so the modem re-enumerates and the SIM can go missing.  The shipped sleep policy keeps it disabled (see FINDINGS.md section D) |
 | Fingerprint Sensor | Broken | — |

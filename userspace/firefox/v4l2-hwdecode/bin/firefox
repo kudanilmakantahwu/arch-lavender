@@ -1,0 +1,22 @@
+#!/bin/sh
+# Firefox launcher for the qcom-venus V4L2-M2M hardware decoder.
+#
+# LD_LIBRARY_PATH pins the media decoder to the patched ffmpeg under
+# /opt/rpi-ffmpeg/lib (libavcodec 61 with v4l2m2m DRM-PRIME/dmabuf output)
+# without touching the system /usr/lib/libavcodec.so.63.  Firefox's
+# FFmpegRuntimeLinker tries libavcodec.so.63 first, so that directory also
+# carries libavcodec.so.63 and libavcodec.so.62 symlinks to the 61 build; the
+# shadow only exists here and is only visible to processes that set this
+# LD_LIBRARY_PATH.
+#
+# MOZ_DISABLE_RDD_SANDBOX=1 lets the RDD (media) child open /dev/videoN.  The
+# Linux RDD sandbox otherwise denies the V4L2 ioctls and the decoder never
+# starts.
+set -eu
+FFMPEG_LIBDIR="${FFMPEG_LIBDIR:-/opt/rpi-ffmpeg/lib}"
+if [ -d "$FFMPEG_LIBDIR" ]; then
+    LD_LIBRARY_PATH="$FFMPEG_LIBDIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH
+fi
+export MOZ_DISABLE_RDD_SANDBOX=1
+exec /usr/lib/firefox/firefox "$@"

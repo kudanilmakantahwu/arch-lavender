@@ -6,9 +6,19 @@
 #   ./build-rootfs.sh rootfs-arch.tar.zst rootfs.img
 #   MESA_GALLIUM=/path/to/libgallium-<ABI>.so \
 #       ./build-rootfs.sh rootfs-arch.tar.zst rootfs.img
+#   RPI_FFMPEG_LIBDIR=/path/to/lib \
+#       ./build-rootfs.sh rootfs-arch.tar.zst rootfs.img
+#   RPI_FFMPEG_PKG=/path/to/ffmpeg-rpi-<ver>.pkg.tar.xz \
+#       ./build-rootfs.sh rootfs-arch.tar.zst rootfs.img
 #
 # MESA_GALLIUM is optional; see userspace/mesa/README.md. Without it, the
 # script selects the prebuilt matching the rootfs libEGL_mesa soname.
+#
+# RPI_FFMPEG_LIBDIR (a directory of built/staged libraries) or RPI_FFMPEG_PKG
+# (the Arch Linux ARM ffmpeg-rpi package) stages the patched ffmpeg that
+# Firefox needs for qcom-venus hardware decode; see
+# userspace/firefox/v4l2-hwdecode/README.md. Without either the image ships
+# software video decode.
 #
 # Requirements on the host: tar, zstd, e2fsprogs (mkfs.ext4, e2fsck,
 # resize2fs).  android-sdk-libsparse-tools (img2simg) is optional; without
@@ -306,6 +316,54 @@ ln -sf /etc/systemd/system/phosh.service \
 echo "==> installing Firefox mobile config"
 sh "$REPO/userspace/firefox/install.sh" "$MNT"
 
+# Firefox only decodes H.264 on the qcom-venus V4L2-M2M decoder in hardware
+# when ffmpeg hands back DRM-PRIME (dmabuf) frames; upstream ffmpeg does not,
+# so a patched rpi-ffmpeg is staged into an isolated prefix and a wrapper sets
+# LD_LIBRARY_PATH + MOZ_DISABLE_RDD_SANDBOX=1 for Firefox only.  The distro
+# ffmpeg under /usr/lib is never replaced.  See
+# userspace/firefox/v4l2-hwdecode/README.md.
+echo "==> installing Firefox venus V4L2-M2M hardware decode config"
+sh "$REPO/userspace/firefox/v4l2-hwdecode/install.sh" "$MNT"
+
+stage_rpi_ffmpeg_dir() {
+    src=$1
+    dest="$MNT/opt/rpi-ffmpeg/lib"
+    mkdir -p "$dest"
+    cp -a "$src"/libav*.so* "$src"/libsw*.so* "$src"/libpostproc*.so* \
+        "$dest/" 2>/dev/null || true
+    # Read the major from the real file (libavcodec.so.<major>.<minor>.<micro>),
+    # not from the .62/.63 shadow links a previous run may have left behind.
+    major=$(ls -1 "$dest"/libavcodec.so.*.* 2>/dev/null | head -n1 |
+            sed -n 's/^.*libavcodec\.so\.\([0-9][0-9]*\)\..*$/\1/p')
+    if [ -z "$major" ]; then
+        echo "error: no libavcodec.so.<major> in $src" >&2
+        exit 1
+    fi
+    # Firefox tries the newest soname first; shadow .62/.63 with the build.
+    for s in 62 63; do
+        if [ "$s" -gt "$major" ]; then
+            ln -sf "libavcodec.so.$major" "$dest/libavcodec.so.$s"
+        fi
+    done
+    echo "    staged libavcodec.so.$major (+ .62/.63 shadows)"
+}
+if [ -n "${RPI_FFMPEG_LIBDIR:-}" ]; then
+    [ -d "$RPI_FFMPEG_LIBDIR" ] || {
+        echo "error: RPI_FFMPEG_LIBDIR not found: $RPI_FFMPEG_LIBDIR" >&2; exit 1; }
+    echo "==> staging patched ffmpeg from $RPI_FFMPEG_LIBDIR"
+    stage_rpi_ffmpeg_dir "$RPI_FFMPEG_LIBDIR"
+elif [ -n "${RPI_FFMPEG_PKG:-}" ]; then
+    [ -f "$RPI_FFMPEG_PKG" ] || {
+        echo "error: RPI_FFMPEG_PKG not found: $RPI_FFMPEG_PKG" >&2; exit 1; }
+    echo "==> staging patched ffmpeg from $RPI_FFMPEG_PKG"
+    sh "$REPO/userspace/firefox/v4l2-hwdecode/stage-ffmpeg-rpi-pkg.sh" \
+        --pkg "$RPI_FFMPEG_PKG" --rootfs "$MNT"
+else
+    echo "WARNING: no RPI_FFMPEG_LIBDIR/RPI_FFMPEG_PKG given; the image will" >&2
+    echo "         ship software video decode (see" >&2
+    echo "         userspace/firefox/v4l2-hwdecode/README.md)." >&2
+fi
+
 # systemctl --root works without booting the image.
 if command -v systemctl >/dev/null 2>&1 &&
    systemctl --root="$MNT" set-default graphical.target >/dev/null 2>&1; then
@@ -444,6 +502,28 @@ grep -q 'Environment=FD_MESA_DEBUG=noubwc' "$MNT/etc/systemd/system/phosh.servic
     echo "error: FD_MESA_DEBUG=noubwc missing from phosh.service" >&2
     verify_fail=1
 }
+
+# Firefox hardware video decode needs the venus wrapper and the default pref.
+# The staged ffmpeg prefix is optional: without RPI_FFMPEG_LIBDIR/RPI_FFMPEG_PKG
+# the build only warns and ships software decode.
+[ -f "$MNT/usr/local/bin/firefox" ] || {
+    echo "error: the Firefox venus wrapper /usr/local/bin/firefox is missing" >&2
+    verify_fail=1
+}
+[ -f "$MNT/usr/lib/firefox/defaults/pref/99-v4l2-hwdecode-prefs.js" ] || {
+    echo "error: the venus default pref 99-v4l2-hwdecode-prefs.js is missing" >&2
+    verify_fail=1
+}
+if [ -d "$MNT/opt/rpi-ffmpeg/lib" ]; then
+    if [ -z "$(ls "$MNT/opt/rpi-ffmpeg/lib"/libavcodec.so.[0-9]* 2>/dev/null)" ]; then
+        echo "error: no libavcodec.so.<major> in /opt/rpi-ffmpeg/lib" >&2
+        verify_fail=1
+    fi
+    [ -e "$MNT/opt/rpi-ffmpeg/lib/libavcodec.so.63" ] || {
+        echo "error: the libavcodec.so.63 shadow is missing" >&2
+        verify_fail=1
+    }
+fi
 
 if [ "$verify_fail" -ne 0 ]; then
     echo "error: refusing to produce a broken image" >&2
