@@ -1,0 +1,15 @@
+[Unit]
+Description=ath10k_snoc Wi-Fi watchdog (power-save/offload fix + soft-reconnect recovery)
+Documentation=file:/usr/local/sbin/ath10k-watchdog.sh
+After=network.target NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/ath10k-watchdog.sh
+Restart=always
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

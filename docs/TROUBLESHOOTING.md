@@ -655,27 +655,26 @@ dmesg | grep -iE 'EX:wlan_process|crash detected|ath10k.*crashed'
 
 If the MSS recovered, the modem comes back under a **new index** within
 seconds; always take the index from `mmcli -L` (do not hard-code `mmcli -m 0`).
-If it did not come back, nudge the radio and the modem stack:
+The safe recovery is a **soft reconnect** (what `userspace/wifi/ath10k-watchdog.sh`
+does automatically):
 
 ```sh
-nmcli radio wifi off; sleep 1; nmcli radio wifi on
-systemctl restart ModemManager
+ip link set wlan0 up
+nmcli device set wlan0 managed yes
+nmcli connection up "CAPING GUNUNG"    # may need a second attempt
 ```
 
-Turning the radio off can itself trigger the crash, so use it only as a
-recovery step.  A forced driver reload does the same without a reboot (it
-restarts the MSS once, so the modem re-enumerates):
+Do **not** try to force a driver reload or toggle the radio. Since the
+2026-11-21 tests all of the following leave the WCNSS unrecoverable until a
+reboot, and can leave Wi-Fi disabled at the next boot:
 
-```sh
-nmcli dev set wlan0 managed no
-printf '%s\n' 18800000.wifi > /sys/bus/platform/drivers/ath10k_snoc/unbind
-sleep 2
-printf '%s\n' 18800000.wifi > /sys/bus/platform/drivers/ath10k_snoc/bind
-nmcli dev set wlan0 managed yes
-nmcli radio wifi on
-```
+* `modprobe -r ath10k_snoc` → `msa info req rejected: 90`, `qmi-board-id=0`;
+* a live `18800000.wifi` `unbind`/`bind` (same `msa ... 90` / `qmi-board-id=0`);
+* `nmcli radio wifi off`/`on` on a working link (`failed to create WMI vdev 0:
+  -108`), which also persists `WirelessEnabled=false`.
 
-See [FINDINGS.md](FINDINGS.md) sections D1 and D2.
+If the soft reconnect does not bring the link back, **reboot**. See
+[FINDINGS.md](FINDINGS.md) sections I5 and K.
 
 While a tone is playing, the amp registers should read (via `/dev/i2c-1`,
 `i2cset`/`i2cget` or a small script):

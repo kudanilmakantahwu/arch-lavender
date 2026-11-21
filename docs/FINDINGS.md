@@ -1220,3 +1220,56 @@ reset/IRQ GPIO handling. Known blockers:
 
 Details, prior art and a reproduction recipe are in
 [`userspace/fingerprint/qseecom-mobile/README.md`](../userspace/fingerprint/qseecom-mobile/README.md).
+
+## K. Wi-Fi throughput knobs and the unsafe reload paths (2026-11-21)
+
+* **The `ethtool`/power-save "fix" does not change throughput.** The absolute
+  numbers in the `curl -4 speed.cloudflare.com` test are set by the access
+  point's internet uplink, not by the WCN3990. The PHY links at 150 Mbit/s
+  (MCS 7, 40 MHz) and a local `scp` moves ~110 Mbit/s (section I6), yet the same
+  download stays at ~0.1–0.9 MB/s (≈5.7 Mbit/s on the one clean pre-change run)
+  **both** before and after disabling power save and the
+  `tx/rx/tso/gso/gro` offloads. Of the requested offloads only
+  `tx-checksumming` and `rx-gro` can actually be turned off on this mac80211
+  device; the rest report `off [requested on]`. Keep the setting only because it
+  is harmless, not because it helps.
+
+* **Never reload the driver and never toggle the radio to "recover".** Every
+  reload/toggle path we tried leaves the WCNSS unrecoverable until a reboot:
+  * `modprobe -r ath10k_snoc` → `msa info req rejected: 90`, `qmi-board-id=0`,
+    `failed to fetch board-2.bin`; `wlan0` never comes back (see I5).
+  * A **live `18800000.wifi` `unbind`/`bind`** does exactly the same (reproduced
+    2026-11-21). This is the "forced driver reload" still suggested by
+    TROUBLESHOOTING; it is **not** a safe reload alternative — `unbind` tears the
+    WLAN subsystem out of the shared MSS and the rebind probe fails with the same
+    `msa ... 90` / `qmi-board-id=0`.
+  * `nmcli radio wifi off`/`on` on a *working* link can also leave it wedged
+    (`failed to create WMI vdev 0: -108`). NetworkManager also persists
+    `WirelessEnabled=false`, so rebooting while the radio is off leaves Wi-Fi
+    **disabled** at the next boot.
+
+  The only safe recovery is a **soft reconnect** — `ip link set wlan0 up`,
+  `nmcli device set wlan0 managed yes`, `nmcli connection up <profile>` — which
+  fixes the common case: the firmware crashes, ath10k self-recovers
+  (`device successfully recovered`), but `wlan0` comes back `DOWN` without DHCP
+  (section I6). Deeper wedges need a reboot.
+
+* **The fix + watchdog live in `userspace/wifi/`.** It installs the
+  power-save/offload NetworkManager dispatcher, the soft-reconnect watchdog, and
+  the IPv6-off / DNS-pinned profile change. On 2026-11-21 it recovered a real
+  crash unaided: firmware crash at 18:22:40 (`-108`, `wlan0` down, no IPv4), the
+  first reconnect missed while the firmware was still restarting, the second
+  reconnect at 18:23:42 → **`recovered`** and the link was back at 150 Mbit/s at
+  18:23:49. The watchdog never reloads the module, never unbinds, and never turns
+  the radio off; if a soft reconnect fails it logs that a reboot is required
+  (it only reboots by itself with `REBOOT_LAST_RESORT=1`).
+
+* **Connecting from the Settings app crashes the link; the top-panel Quick
+  Settings works (user-reported).** Picking/switching an SSID in the Settings
+  app's Wi-Fi panel repeatedly crashed `ath10k` on this device, while choosing
+  the same network from the top-panel Quick Settings connected normally. A plain
+  `nmcli device wifi rescan` while associated did **not** reproduce it, so it is
+  not the scan itself — it is more likely the connect/reconnect (or profile
+  create) cycle the Settings panel drives. Workaround: pick Wi-Fi networks from
+  Quick Settings; if Settings has already wedged the link, the watchdog's
+  reconnect (or a reboot) restores it.

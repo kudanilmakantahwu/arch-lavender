@@ -35,7 +35,7 @@ broken or untested, and is described in the sections below.
 | Feature | Status | Notes |
 | --- | --- | --- |
 | Boot / Reboot | Working | Stable system boot |
-| Wi-Fi | Working | WCN3990 / `ath10k` (2.4 GHz & 5 GHz) |
+| Wi-Fi | Working | WCN3990 / `ath10k` (2.4 GHz & 5 GHz). Throughput is limited by the access point's uplink, not the 150 Mbit/s PHY (FINDINGS §K). `userspace/wifi/` installs a power-save/offload fix + a soft-reconnect watchdog |
 | Display & Touchscreen | Working | Shenchao panel only |
 | GPU (Adreno 512, a5xx) | Partial | Kernel 7.2.3 carries the upstream a5xx fixes; Mesa's a5xx 2D-blit glyph bug is fixed in userspace by the patched `libgallium`; UBWC disabled for app compatibility |
 | Charging & Battery | Working | Standard charging and battery reporting work |
@@ -220,8 +220,9 @@ mode. Charge the phone while the system is booted.
 | --- | --- |
 | SIM not detected | Put the SIM in slot 1; `systemctl restart modem-uim-init ModemManager` |
 | Modem stuck after a failed restart | `qcom-mss-stop`, then restart `rmtfs` (never restart `rmtfs` on a live modem) |
-| WiFi and modem vanish together (after resume or a radio toggle) | they share the MSS remoteproc; the modem re-enumerates under a new `mmcli -L` index. `nmcli radio wifi off; nmcli radio wifi on; systemctl restart ModemManager` |
-| WiFi dead after a disconnect | reboot; the `0006` patch prevents the firmware crash, but a wedged device still needs a reboot |
+| WiFi and modem vanish together (after resume or a radio toggle) | they share the MSS remoteproc; the modem re-enumerates under a new `mmcli -L` index. Recover with a **soft reconnect** (`ip link set wlan0 up; nmcli device set wlan0 managed yes; nmcli connection up "CAPING GUNUNG"`), done automatically by `userspace/wifi/ath10k-watchdog.sh`; do **not** `modprobe -r`, `unbind` or toggle the radio — all wedge the WCNSS until a reboot (FINDINGS §K) |
+| WiFi dead after a reload / radio toggle / disconnect | reboot. `modprobe -r ath10k_snoc`, a live `18800000.wifi` `unbind`/`bind` **and** `nmcli radio wifi off/on` all wedge the WCNSS (`msa info req rejected: 90`, `qmi-board-id=0`) until a reboot, and `radio off` persists `WirelessEnabled=false` so Wi-Fi stays off after the next boot. A soft reconnect covers the firmware-crash case without a reboot |
+| Choosing a WiFi network from the Settings app crashes `ath10k` | pick the network from the top-panel Quick Settings instead; the Settings panel's connect/reconnect cycle wedges the link. The watchdog's soft reconnect (or a reboot) restores it |
 | ModemManager patched binary lost after upgrade | `pacman` hook restores it from `/usr/local/lib/patched/ModemManager`; if the ABI changed, rebuild it |
 | Root filesystem needs repair | the initramfs runs `e2fsck -p`, then `e2fsck -f -y` |
 | GTK4 text loses random glyphs | install the patched `libgallium` from `userspace/mesa/` and restart `phosh`; that fixes the a512 2D-blit bug. `GSK_RENDERER=cairo` is only a temporary fallback |

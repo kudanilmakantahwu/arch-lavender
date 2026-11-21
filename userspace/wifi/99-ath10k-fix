@@ -1,0 +1,28 @@
+#!/bin/sh
+# NetworkManager dispatcher: throughput fix for ath10k_snoc (WCN3990) on wlan0.
+#
+# Installed by userspace/wifi/install.sh as
+#   /etc/NetworkManager/dispatcher.d/99-ath10k-fix
+# (root:root, mode 0755). NetworkManager runs it on interface state changes.
+#
+# Two things are re-applied every time wlan0 comes up:
+#   * 802.11 power save is turned off (ath10k PS modes stall on this part);
+#   * the hardware/software offloads that hurt throughput are turned off.
+# The ath10k-watchdog does the same after a driver reload; this script covers
+# the plain reconnects in between.
+
+IFACE="$1"
+ACTION="$2"
+
+[ -n "$IFACE" ] || exit 0
+[ "$IFACE" = "wlan0" ] || exit 0
+
+case "$ACTION" in
+    up|reapply) ;;
+    *) exit 0 ;;
+esac
+
+iw dev wlan0 set power_save off 2>/dev/null || true
+ethtool -K wlan0 tx off rx off tso off gso off gro off 2>/dev/null || true
+
+exit 0
