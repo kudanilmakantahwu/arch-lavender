@@ -1056,3 +1056,47 @@ session showed the video rendering normally.
 
 See [`userspace/firefox/v4l2-hwdecode/README.md`](../userspace/firefox/v4l2-hwdecode/README.md)
 for the build/stage commands and the rollback steps.
+
+### I5. Re-verification: node numbering, 1080p60, and the WiFi ceiling (2026-11-21)
+
+* **The venus node numbers are not stable across boots.** The decoder and
+  encoder are bound to `/dev/video0`/`/dev/video1` in probe order, so which is
+  which flips between boots (in one boot `video0` was the decoder, in the next
+  it was the encoder). Identify the decoder by its *coded* OUTPUT formats
+  (`H264`/`VP80`/`VP90`/`HEVC`, with `NV12`/`Q08C` on CAPTURE); the encoder
+  only takes `NV12` on OUTPUT:
+
+  ```sh
+  v4l2-ctl -d /dev/videoN --list-formats-out    # H264... => decoder
+  ```
+
+  A verification script that hard-codes `/dev/video0` therefore gives false
+  passes and failures from one boot to the next even though nothing is wrong;
+  check both nodes (or derive the decoder from the formats) before asserting
+  that the RDD process holds it.
+
+* **A full 1080p60 H.264 stream decodes on venus.** The YouTube video
+  `LXb3EKWsInQ` ("COSTA RICA IN 4K 60fps HDR") was fetched at its 1080p60
+  H.264 rendition (itag 299, 1920x1080, 60 fps) and played through Firefox:
+  the RDD process held the decoder node, the venus IRQ counter rose by
+  **3237** over ~39 s, `MOZ_LOG` showed `h264_v4l2m2m` +
+  `Initialising V4L2-DRM FFmpeg decoder` with **1633** output frames and **0**
+  `non-DRM-PRIME`, the decode ran at 16.68 ms/frame (60 fps), and RDD CPU was
+  **12.7%**. Only `/opt/rpi-ffmpeg/lib` was mapped.
+
+* **Streaming the same video *from YouTube* cannot reach 1080p on this access
+  point, and the `ath10k_snoc` link — not the decoder — is the limit.**
+  YouTube's own quality menu offers `1080p60 HD`, but "Auto" selects 480p and
+  the player stalls (`waiting` x1.3e4). The link only sustains roughly
+  0.1–0.5 MB/s (~1–4 Mbit/s), even after disabling WiFi power save
+  (`wifi.powersave = 2` in `/etc/NetworkManager/conf.d/wifi-powersave-off.conf`)
+  and setting the regulatory domain (`options cfg80211 ieee80211_regdom=ID` in
+  `/etc/modprobe.d/cfg80211.conf`; `cfg80211` is a module here, and the
+  associated AP sends a country IE that makes `iw reg get` report `CN`). Even
+  after a clean reboot the link stays below what 1080p60 needs. `MOZ_LOG` still
+  shows the DRM-PRIME V4L2 decoder engaged with 0 `non-DRM-PRIME` — the decode
+  path is fine, the source simply cannot deliver 1080p over this link. Note
+  also that a manual `modprobe -r ath10k_snoc` is *not* a safe recovery here:
+  unloading the module tears down the shared MSS (`remoteproc0`), after which
+  the WCN3990 QMI handshake fails (`msa map permissions -22`, `qmi-board-id=0`)
+  and WiFi only returns after a full reboot.
